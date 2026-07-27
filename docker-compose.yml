@@ -1,0 +1,29 @@
+services:
+  jim-search:
+    build:
+      context: .
+      network: host
+      args:
+        - HTTP_PROXY=${HTTP_PROXY:-http://127.0.0.1:7890}
+        - HTTPS_PROXY=${HTTPS_PROXY:-http://127.0.0.1:7890}
+    image: jim-search:latest
+    container_name: jim-search-api
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - JIM_SEARCH_HOST=0.0.0.0
+      - JIM_SEARCH_PORT=17492
+      - BRAVE_API_KEY=${BRAVE_API_KEY:-}
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY:-}
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+      - HTTP_PROXY=${HTTP_PROXY:-http://127.0.0.1:7890}
+      - HTTPS_PROXY=${HTTPS_PROXY:-http://127.0.0.1:7890}
+      - JIM_SEARCH_TIMEOUT=${JIM_SEARCH_TIMEOUT:-30}
+      - JIM_SEARCH_SCRAPE_TIMEOUT=${JIM_SEARCH_SCRAPE_TIMEOUT:-60}
+      - JIM_SEARCH_MIN_CONTENT_LENGTH=${JIM_SEARCH_MIN_CONTENT_LENGTH:-200}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://127.0.0.1:17492/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

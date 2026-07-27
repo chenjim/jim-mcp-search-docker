@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Wrapper to call the local jim-search HTTP service.
+# Optional: symlink to ~/.local/bin/jim-search for global access.
+
+set -euo pipefail
+
+QUERY="${1:-}"
+TOP="${2:-10}"
+SCRAPE="${3:-5}"
+
+if [[ -z "$QUERY" ]]; then
+    echo "Usage: jim-search <query> [top] [scrape]" >&2
+    exit 1
+fi
+
+curl -s -G "http://127.0.0.1:17492/search" \
+    --data-urlencode "q=$QUERY" \
+    --data-urlencode "top=$TOP" \
+    --data-urlencode "scrape=$SCRAPE"
