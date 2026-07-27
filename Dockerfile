@@ -18,4 +18,4 @@ COPY src /app/src
 
 EXPOSE 17492
 
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "17492"]
+CMD ["sh", "-c", "uvicorn src.main:app --host ${JIM_SEARCH_HOST:-0.0.0.0} --port ${JIM_SEARCH_PORT:-17492}"]

@@ -27,4 +27,3 @@ build/
 Thumbs.db
 
 # Docker
-.dockerignore

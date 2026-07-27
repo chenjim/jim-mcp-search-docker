@@ -18,10 +18,8 @@ def search(query: str, count: int = 10, freshness: Optional[str] = None) -> List
 
     client = TavilyClient(api_key=config.TAVILY_API_KEY)
 
-    # Map freshness to Tavily time_range if possible
-    time_range = None
-    if freshness in ("pd", "pw", "pm", "py"):
-        time_range = freshness
+    FRESHNESS_MAP = {"pd": "day", "pw": "week", "pm": "month", "py": "year"}
+    time_range = FRESHNESS_MAP.get(freshness) if freshness else None
 
     try:
         response = client.search(
