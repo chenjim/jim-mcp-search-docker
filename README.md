@@ -1,8 +1,8 @@
 # jim-search
 
-统一的 Web 搜索 + 网页抓取 HTTP API 服务。
+统一的 Web 搜索 + 网页抓取服务，同时提供 HTTP API 与 MCP（Streamable HTTP）。
 
-搜索源 fallback 顺序：
+搜索源 fallback 顺序（`JIM_SEARCH_PROVIDER_ORDER=random` 时前三者随机打散）：
 
 ```
 Brave → Firecrawl → Tavily → DuckDuckGo
@@ -14,6 +14,8 @@ Brave → Firecrawl → Tavily → DuckDuckGo
 jina.ai → Firecrawl scrape
 ```
 
+搜索与抓取是**分离**的：`/search` 只返回标题/URL/摘要，`/scrape` 按需抓取正文。
+
 ## 启动
 
 ```bash
@@ -23,23 +25,75 @@ cp .env.example .env
 docker compose up -d
 ```
 
-## 调用
+## HTTP API
 
 ```bash
+TOKEN="<your-token>"
+
+# 搜索（不抓正文）
 curl -G "http://127.0.0.1:17492/search" \
+  -H "Authorization: Bearer $TOKEN" \
   --data-urlencode "q=OpenCode CLI agent alternatives" \
-  --data-urlencode "top=10" \
-  --data-urlencode "scrape=5"
+  --data-urlencode "top=10"
+
+# 抓取正文（可一次传多个 URL，并发执行）
+curl -X POST "http://127.0.0.1:17492/scrape" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"urls": ["https://example.com/a", "https://example.com/b"]}'
 ```
 
-参数：
+`GET /search` 参数：
 
 | 参数 | 说明 | 默认值 |
 |---|---|---|
 | `q` | 搜索关键词 | 必填 |
 | `top` | 返回结果数（1-20） | 10 |
-| `scrape` | 抓取全文的条数 | 5 |
 | `freshness` | 时间过滤：`pd`、`pw`、`pm`、`py` | 无 |
+
+`POST /scrape` 参数：
+
+| 参数 | 说明 | 默认值 |
+|---|---|---|
+| `urls` | URL 数组（1-20） | 必填 |
+| `concurrency` | 并发数（1-20） | 5 |
+| `max_chars` | 单页截断长度，0 表示不限 | 20000 |
+
+## MCP
+
+服务在 `http://127.0.0.1:17492/mcp` 暴露 MCP（Streamable HTTP），提供两个工具：
+
+| 工具 | 说明 |
+|---|---|
+| `web_search(query, top, freshness)` | 搜索，返回 title/url/snippet |
+| `web_scrape(urls, max_chars, concurrency)` | 并发抓取正文 markdown |
+
+在 opencode 中注册（`~/.config/opencode/opencode.json`）：
+
+```json
+"jim-search": {
+  "type": "remote",
+  "url": "http://127.0.0.1:17492/mcp",
+  "enabled": true,
+  "headers": {
+    "Authorization": "Bearer <your-token>"
+  }
+}
+```
+
+## 鉴权
+
+`/search`、`/scrape`、`/mcp` 需要 Bearer token（`/health` 始终开放）。请求头二选一：
+
+```
+Authorization: Bearer <token>
+X-API-Key: <token>
+```
+
+- token 由 `JIM_SEARCH_AUTH_TOKEN` 配置；为空则关闭鉴权（**仅限本机使用**）。
+- 生成 token：`python3 -c "import secrets; print(secrets.token_urlsafe(32))"`。
+- 其他机器上的 `jim-search` 脚本读取 `JIM_SEARCH_BASE`（远端地址）与 `JIM_SEARCH_AUTH_TOKEN`，也可把 token 写入 `~/.config/jim-search/token`。
+- 对外暴露务必置于 HTTPS 反向代理（nginx/caddy）之后，避免 token 明文传输；建议同时在反代层做访问日志与限流。
 
 ## 环境变量
 
@@ -49,6 +103,11 @@ curl -G "http://127.0.0.1:17492/search" \
 | `FIRECRAWL_API_KEY` | Firecrawl API key |
 | `TAVILY_API_KEY` | Tavily API key |
 | `HTTP_PROXY` / `HTTPS_PROXY` | 出站代理，默认 `http://127.0.0.1:7890` |
+| `JIM_SEARCH_PROVIDER_ORDER` | `random`（默认）或 `sequential` |
+| `JIM_SEARCH_SCRAPE_CONCURRENCY` | 抓取并发数，默认 5 |
+| `JIM_SEARCH_MAX_CHARS` | 单页截断长度，默认 20000，0 不限 |
+| `JIM_SEARCH_MIN_CONTENT_LENGTH` | 判定抓取成功的最小字符数，默认 200 |
+| `JIM_SEARCH_AUTH_TOKEN` | 访问 `/search` `/scrape` `/mcp` 的 Bearer token；为空则关闭鉴权 |
 
 ## 停止
 

@@ -1,16 +1,19 @@
-"""FastAPI HTTP server for unified web research."""
+"""FastAPI HTTP server for unified web research.
+
+Search and scrape are separate endpoints. The same core logic is also exposed
+as an MCP server mounted at `/mcp` (see `src/mcp_server.py`).
+"""
 import logging
+from contextlib import asynccontextmanager
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from src import config
-from src.providers import SearchResult, normalize_url
-from src.providers import brave, firecrawl as firecrawl_search, tavily, duckduckgo
-from src.scrapers import ScrapeResult
-from src.scrapers import jina as jina_scraper, firecrawl as firecrawl_scraper
+from src import config, service
+from src.auth import AuthMiddleware
+from src.mcp_server import mcp
 
 logging.basicConfig(
     level=logging.INFO,
@@ -18,27 +21,64 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    if not config.AUTH_TOKEN:
+        logger.warning(
+            "JIM_SEARCH_AUTH_TOKEN is not set: /search, /scrape and /mcp are OPEN. "
+            "Set a token before exposing this service beyond localhost."
+        )
+    # FastAPI does not run nested lifespans under Mount, so enter the MCP
+    # session manager here to make the /mcp sub-app functional.
+    async with mcp.session_manager.run():
+        yield
+
+
 app = FastAPI(
     title="jim-search",
-    description="Unified search + scrape API: Brave → Firecrawl → Tavily → DuckDuckGo; scrape via jina.ai → Firecrawl.",
-    version="0.1.0",
+    description=(
+        "Unified search + scrape API: Brave/Firecrawl/Tavily (random order) → DuckDuckGo; "
+        "scrape via jina.ai → Firecrawl. MCP endpoint at /mcp."
+    ),
+    version="0.2.0",
+    lifespan=lifespan,
 )
 
+# Protect /search, /scrape and /mcp with the shared bearer token.
+app.add_middleware(AuthMiddleware)
 
-class SourceOut(BaseModel):
+
+class SearchSource(BaseModel):
     title: str
     url: str
-    search_source: str
-    scrape_source: Optional[str] = None
-    markdown: Optional[str] = None
-    status: str = Field(..., pattern="^(ok|search_only|failed)$")
+    snippet: Optional[str] = None
 
 
 class SearchResponse(BaseModel):
     query: str
     search_chain_used: List[str]
+    results: List[SearchSource]
+    metadata: dict
+
+
+class ScrapeRequest(BaseModel):
+    urls: List[str] = Field(..., min_length=1, max_length=20)
+    concurrency: Optional[int] = Field(None, ge=1, le=20)
+    max_chars: Optional[int] = Field(None, ge=0)
+
+
+class ScrapeSource(BaseModel):
+    url: str
+    markdown: Optional[str] = None
+    scrape_source: Optional[str] = None
+    status: str = Field(..., pattern="^(ok|failed)$")
+    error: Optional[str] = None
+
+
+class ScrapeResponse(BaseModel):
     scrape_chain_used: List[str]
-    sources: List[SourceOut]
+    results: List[ScrapeSource]
     metadata: dict
 
 
@@ -50,114 +90,27 @@ def health() -> dict:
 @app.get("/search", response_model=SearchResponse)
 def search(
     q: str = Query(..., description="Search query"),
-    top: int = Query(10, ge=1, le=20, description="Number of search results to return"),
-    scrape: int = Query(5, ge=0, le=20, description="Number of top results to scrape full content"),
+    top: int = Query(10, ge=1, le=20, description="Number of results to return"),
     freshness: Optional[str] = Query(None, description="Time filter: pd, pw, pm, py or date range"),
 ):
-    """Unified search endpoint with provider fallback and scrape fallback."""
-    logger.info("Search request: q=%s top=%d scrape=%d freshness=%s", q, top, scrape, freshness)
+    """Search the web; returns title/url/snippet only (no page content)."""
+    try:
+        return service.search(q, top=top, freshness=freshness)
+    except service.SearchError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
 
-    # Provider fallback chain
-    providers = [
-        ("brave", brave.search),
-        ("firecrawl", firecrawl_search.search),
-        ("tavily", tavily.search),
-        ("duckduckgo", duckduckgo.search),
-    ]
 
-    raw_results: List[SearchResult] = []
-    search_chain_used: List[str] = []
-    last_error: Optional[str] = None
-
-    for name, provider_fn in providers:
-        try:
-            results = provider_fn(q, count=top, freshness=freshness)
-        except Exception as exc:
-            logger.warning("Provider %s raised exception: %s", name, exc)
-            last_error = str(exc)
-            continue
-
-        if results:
-            raw_results = results
-            search_chain_used.append(name)
-            break
-        else:
-            logger.info("Provider %s returned no results", name)
-
-    if not raw_results:
-        raise HTTPException(
-            status_code=503,
-            detail=f"All search providers failed or returned no results. Last error: {last_error}",
-        )
-
-    # Deduplicate by normalized URL and trim to top
-    seen: set[str] = set()
-    deduped: List[SearchResult] = []
-    for r in raw_results:
-        key = normalize_url(r.url)
-        if key and key not in seen:
-            seen.add(key)
-            deduped.append(r)
-        if len(deduped) >= top:
-            break
-
-    # Scrape fallback chain
-    scrape_chain_used: List[str] = []
-    sources: List[SourceOut] = []
-    scraped_count = 0
-    failed_count = 0
-
-    for idx, item in enumerate(deduped):
-        source = SourceOut(
-            title=item.title,
-            url=item.url,
-            search_source=search_chain_used[0],
-            status="search_only",
-        )
-
-        if scrape > 0 and idx < scrape:
-            # Try jina first
-            jina_result = jina_scraper.scrape(item.url)
-            if jina_result.markdown:
-                source.markdown = jina_result.markdown
-                source.scrape_source = jina_result.source
-                source.status = "ok"
-                scraped_count += 1
-                if jina_result.source not in scrape_chain_used:
-                    scrape_chain_used.append(jina_result.source)
-            else:
-                # Fallback to Firecrawl scrape
-                fc_result = firecrawl_scraper.scrape(item.url)
-                if fc_result.markdown:
-                    source.markdown = fc_result.markdown
-                    source.scrape_source = fc_result.source
-                    source.status = "ok"
-                    scraped_count += 1
-                    if fc_result.source not in scrape_chain_used:
-                        scrape_chain_used.append(fc_result.source)
-                else:
-                    source.status = "failed"
-                    failed_count += 1
-                    if "firecrawl" not in scrape_chain_used:
-                        scrape_chain_used.append("firecrawl")
-        else:
-            # Not scheduled for scraping; keep title/url/snippet
-            pass
-
-        sources.append(source)
-
-    response = SearchResponse(
-        query=q,
-        search_chain_used=search_chain_used,
-        scrape_chain_used=scrape_chain_used,
-        sources=sources,
-        metadata={
-            "total_search_results": len(deduped),
-            "scraped_count": scraped_count,
-            "failed_scrape_count": failed_count,
-        },
+@app.post("/scrape", response_model=ScrapeResponse)
+def scrape(req: ScrapeRequest):
+    """Fetch full page content (markdown) for one or more URLs."""
+    return service.scrape_urls(
+        req.urls, concurrency=req.concurrency, max_chars=req.max_chars
     )
-    return response
+
+
+# Mounted at "/" (added last, so FastAPI routes win) so the MCP route stays
+# exactly "/mcp" instead of being prefix-stripped and 307-redirected to "/mcp/".
+app.mount("/", mcp.streamable_http_app())
 
 
 @app.exception_handler(Exception)

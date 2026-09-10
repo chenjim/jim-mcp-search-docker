@@ -26,9 +26,19 @@ if HTTP_PROXY or HTTPS_PROXY:
     if HTTPS_PROXY:
         PROXIES["https"] = HTTPS_PROXY
 
+# Provider order: random = 随机均衡免费额度; sequential = 固定 Brave→Firecrawl→Tavily
+SEARCH_PROVIDER_ORDER: str = _get_env("JIM_SEARCH_PROVIDER_ORDER", "random")
+
+# Static bearer token for /search, /scrape and /mcp. Empty = auth disabled (local use only).
+AUTH_TOKEN: str = (_get_env("JIM_SEARCH_AUTH_TOKEN", "") or "").strip()
+
 # Timeouts
 SEARCH_TIMEOUT: int = int(_get_env("JIM_SEARCH_TIMEOUT", "30"))
 SCRAPE_TIMEOUT: int = int(_get_env("JIM_SEARCH_SCRAPE_TIMEOUT", "60"))
 
 # Default content quality threshold (minimum characters to consider a scrape successful)
 MIN_CONTENT_LENGTH: int = int(_get_env("JIM_SEARCH_MIN_CONTENT_LENGTH", "200"))
+
+# Scrape tuning: concurrent workers and per-page truncation (0 = unlimited)
+SCRAPE_CONCURRENCY: int = int(_get_env("JIM_SEARCH_SCRAPE_CONCURRENCY", "5"))
+MAX_CHARS: int = int(_get_env("JIM_SEARCH_MAX_CHARS", "20000"))
