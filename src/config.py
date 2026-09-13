@@ -32,6 +32,13 @@ SEARCH_PROVIDER_ORDER: str = _get_env("JIM_SEARCH_PROVIDER_ORDER", "random")
 # Static bearer token for /search, /scrape and /mcp. Empty = auth disabled (local use only).
 AUTH_TOKEN: str = (_get_env("JIM_SEARCH_AUTH_TOKEN", "") or "").strip()
 
+# Allowed Host header values for the /mcp endpoint (DNS rebinding protection whitelist).
+# Comma-separated host names or IPs; a "*" port suffix is added by mcp_server.py.
+ALLOWED_HOSTS: list = [
+    h.strip() for h in _get_env("JIM_SEARCH_ALLOWED_HOSTS", "localhost,127.0.0.1,192.168.31.165").split(",")
+    if h.strip()
+]
+
 # Timeouts
 SEARCH_TIMEOUT: int = int(_get_env("JIM_SEARCH_TIMEOUT", "30"))
 SCRAPE_TIMEOUT: int = int(_get_env("JIM_SEARCH_SCRAPE_TIMEOUT", "60"))

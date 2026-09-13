@@ -10,10 +10,17 @@ from typing import List, Optional
 
 import anyio
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
-from src import service
+from src import config, service
 
 logger = logging.getLogger(__name__)
+
+# Whitelist Host headers for the /mcp endpoint: DNS rebinding protection is on,
+# so LAN access (e.g. via 192.168.31.165) needs to be allow-listed explicitly.
+_transport_security = TransportSecuritySettings(
+    allowed_hosts=[f"{host}:*" for host in config.ALLOWED_HOSTS]
+)
 
 mcp = FastMCP(
     "jim-search",
@@ -23,6 +30,7 @@ mcp = FastMCP(
         "Search and scrape are separate: scrape only what you need."
     ),
     streamable_http_path="/mcp",
+    transport_security=_transport_security,
 )
 
 

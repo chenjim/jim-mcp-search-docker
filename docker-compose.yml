@@ -25,6 +25,7 @@ services:
       - JIM_SEARCH_SCRAPE_CONCURRENCY=${JIM_SEARCH_SCRAPE_CONCURRENCY:-5}
       - JIM_SEARCH_MAX_CHARS=${JIM_SEARCH_MAX_CHARS:-20000}
       - JIM_SEARCH_AUTH_TOKEN=${JIM_SEARCH_AUTH_TOKEN:-}
+      - JIM_SEARCH_ALLOWED_HOSTS=${JIM_SEARCH_ALLOWED_HOSTS:-localhost,127.0.0.1,192.168.31.165}
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://127.0.0.1:17492/health', timeout=5)"]
       interval: 30s
