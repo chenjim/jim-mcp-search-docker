@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from duckduckgo_search import DDGS
 
-from src.providers import SearchResult
+from src.providers import SearchResult, ProviderError
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ def search(query: str, count: int = 10, freshness: Optional[str] = None) -> List
             raw = ddgs.text(query, max_results=min(count, 20))
     except Exception as exc:
         logger.warning("DuckDuckGo search failed: %s", exc)
-        return []
+        raise ProviderError("duckduckgo", str(exc)) from exc
 
     results: List[SearchResult] = []
     for item in raw:

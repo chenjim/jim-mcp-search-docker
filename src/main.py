@@ -38,8 +38,8 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="jim-search",
     description=(
-        "Unified search + scrape API: Brave/Firecrawl/Tavily (random order) → DuckDuckGo; "
-        "scrape via jina.ai → Firecrawl. MCP endpoint at /mcp."
+        "Unified search + scrape API: Brave/Firecrawl/Tavily/Parallel (random order) → DuckDuckGo; "
+        "scrape via jina.ai → Parallel → Firecrawl. MCP endpoint at /mcp."
     ),
     version="0.2.0",
     lifespan=lifespan,

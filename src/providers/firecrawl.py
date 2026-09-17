@@ -5,7 +5,7 @@ from typing import List, Optional
 import requests
 
 from src import config
-from src.providers import SearchResult
+from src.providers import SearchResult, ProviderError, classify_error
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +40,13 @@ def search(query: str, count: int = 10, freshness: Optional[str] = None) -> List
         data = resp.json()
     except Exception as exc:
         logger.warning("Firecrawl search failed: %s", exc)
-        return []
+        raise classify_error("firecrawl", exc) from exc
 
     results: List[SearchResult] = []
     if not data.get("success"):
-        logger.warning("Firecrawl search returned success=false: %s", data)
-        return results
+        error = data.get("error", "Firecrawl returned success=false")
+        logger.warning("Firecrawl search failed: %s", error)
+        raise ProviderError("firecrawl", error)
 
     for item in data.get("data", []):
         results.append(

@@ -2,16 +2,18 @@
 
 统一的 Web 搜索 + 网页抓取服务，同时提供 HTTP API 与 MCP（Streamable HTTP）。
 
-搜索源 fallback 顺序（`JIM_SEARCH_PROVIDER_ORDER=random` 时前三者随机打散）：
+搜索源由 `JIM_SEARCH_PROVIDER_ORDER` 控制：
 
-```
-Brave → Firecrawl → Tavily → DuckDuckGo
-```
+- `random`（默认）：Brave / Firecrawl / Tavily / Parallel 每次随机打散，均衡免费额度
+- `sequential`：固定 Brave → Firecrawl → Tavily → Parallel
+- 逗号列表（如 `tavily,brave`）：严格按列出顺序，未列出的源不参与
+
+DuckDuckGo 始终最后兜底（除非在显式列表中点名）。`random` / `sequential` 会跳过**未配置 key**或**当天额度/鉴权失败（熔断至次日 00:00）**的源；显式列表不跳过，按点名顺序照试。
 
 全文抓取 fallback 顺序：
 
 ```
-jina.ai → Firecrawl scrape
+jina.ai → Parallel Extract → Firecrawl scrape
 ```
 
 搜索与抓取是**分离**的：`/search` 只返回标题/URL/摘要，`/scrape` 按需抓取正文。
@@ -102,8 +104,10 @@ X-API-Key: <token>
 | `BRAVE_API_KEY` | Brave Search API key |
 | `FIRECRAWL_API_KEY` | Firecrawl API key |
 | `TAVILY_API_KEY` | Tavily API key |
+| `PARALLEL_API_KEY` | Parallel AI API key（`https://platform.parallel.ai/`），用于 Search 与 Extract 抓取 |
+| `PARALLEL_SEARCH_MODE` | Parallel 搜索模式 `turbo`/`fast`/`basic`/`advanced`，默认 `fast` |
 | `HTTP_PROXY` / `HTTPS_PROXY` | 出站代理，默认 `http://127.0.0.1:7890` |
-| `JIM_SEARCH_PROVIDER_ORDER` | `random`（默认）或 `sequential` |
+| `JIM_SEARCH_PROVIDER_ORDER` | `random`（默认）、`sequential` 或显式逗号列表（如 `tavily,brave`） |
 | `JIM_SEARCH_SCRAPE_CONCURRENCY` | 抓取并发数，默认 5 |
 | `JIM_SEARCH_MAX_CHARS` | 单页截断长度，默认 20000，0 不限 |
 | `JIM_SEARCH_MIN_CONTENT_LENGTH` | 判定抓取成功的最小字符数，默认 200 |

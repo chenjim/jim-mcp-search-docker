@@ -16,6 +16,8 @@ services:
       - BRAVE_API_KEY=${BRAVE_API_KEY:-}
       - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY:-}
       - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+      - PARALLEL_API_KEY=${PARALLEL_API_KEY:-}
+      - PARALLEL_SEARCH_MODE=${PARALLEL_SEARCH_MODE:-fast}
       - HTTP_PROXY=${HTTP_PROXY:-http://127.0.0.1:7890}
       - HTTPS_PROXY=${HTTPS_PROXY:-http://127.0.0.1:7890}
       - JIM_SEARCH_PROVIDER_ORDER=${JIM_SEARCH_PROVIDER_ORDER:-random}
@@ -26,6 +28,8 @@ services:
       - JIM_SEARCH_MAX_CHARS=${JIM_SEARCH_MAX_CHARS:-20000}
       - JIM_SEARCH_AUTH_TOKEN=${JIM_SEARCH_AUTH_TOKEN:-}
       - JIM_SEARCH_ALLOWED_HOSTS=${JIM_SEARCH_ALLOWED_HOSTS:-localhost,127.0.0.1,192.168.31.165}
+      # 熔断恢复时间按本地午夜计算，需与宿主机时区一致
+      - TZ=${TZ:-Asia/Shanghai}
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://127.0.0.1:17492/health', timeout=5)"]
       interval: 30s

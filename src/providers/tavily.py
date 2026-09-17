@@ -5,7 +5,7 @@ from typing import List, Optional
 from tavily import TavilyClient
 
 from src import config
-from src.providers import SearchResult
+from src.providers import SearchResult, classify_error
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ def search(query: str, count: int = 10, freshness: Optional[str] = None) -> List
         )
     except Exception as exc:
         logger.warning("Tavily search failed: %s", exc)
-        return []
+        raise classify_error("tavily", exc) from exc
 
     results: List[SearchResult] = []
     for item in response.get("results", []):

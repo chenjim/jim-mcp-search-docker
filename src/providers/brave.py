@@ -5,7 +5,7 @@ from typing import List, Optional
 import requests
 
 from src import config
-from src.providers import SearchResult
+from src.providers import SearchResult, classify_error
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +43,9 @@ def search(query: str, count: int = 10, freshness: Optional[str] = None) -> List
         )
         resp.raise_for_status()
         data = resp.json()
-    except Exception as exc:  # pragma: no cover - provider failures are logged and retried upstream
+    except Exception as exc:
         logger.warning("Brave search failed: %s", exc)
-        return []
+        raise classify_error("brave", exc) from exc
 
     results: List[SearchResult] = []
     for item in data.get("web", {}).get("results", []):

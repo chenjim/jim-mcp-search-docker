@@ -4,6 +4,7 @@ import pytest
 from src import service
 from src.providers import SearchResult
 from src.scrapers import ScrapeResult
+from src.scrapers import direct as direct_scraper
 
 
 def _provider(name, results):
@@ -69,6 +70,57 @@ def test_scrape_one_falls_back_to_firecrawl(monkeypatch):
     assert result.markdown == "fc content"
 
 
+def test_scrape_one_wechat_goes_direct(monkeypatch):
+    jina_called = False
+
+    def fake_jina(url):
+        nonlocal jina_called
+        jina_called = True
+        return ScrapeResult(markdown="jina", source="jina")
+
+    monkeypatch.setattr(service.jina_scraper, "scrape", fake_jina)
+    monkeypatch.setattr(
+        service.direct_scraper, "scrape",
+        lambda url: ScrapeResult(markdown="wx content", source="direct"),
+    )
+    result = service.scrape_one("https://mp.weixin.qq.com/s/abc")
+    assert result.source == "direct"
+    assert result.markdown == "wx content"
+    assert not jina_called
+
+
+def test_scrape_one_blocked_marker_falls_back(monkeypatch):
+    monkeypatch.setattr(
+        service.jina_scraper, "scrape",
+        lambda url: ScrapeResult(markdown="环境异常，完成验证后即可继续访问", source="jina"),
+    )
+    monkeypatch.setattr(
+        service.firecrawl_scraper, "scrape",
+        lambda url: ScrapeResult(markdown="fc content", source="firecrawl"),
+    )
+    result = service.scrape_one("https://a.com")
+    assert result.source == "firecrawl"
+    assert result.markdown == "fc content"
+
+
+def test_scrape_one_falls_back_to_direct(monkeypatch):
+    monkeypatch.setattr(
+        service.jina_scraper, "scrape",
+        lambda url: ScrapeResult(markdown="环境异常", source="jina"),
+    )
+    monkeypatch.setattr(
+        service.firecrawl_scraper, "scrape",
+        lambda url: ScrapeResult(markdown=None, source="firecrawl", error="short"),
+    )
+    monkeypatch.setattr(
+        service.direct_scraper, "scrape",
+        lambda url: ScrapeResult(markdown="direct content", source="direct"),
+    )
+    result = service.scrape_one("https://a.com")
+    assert result.source == "direct"
+    assert result.markdown == "direct content"
+
+
 def test_scrape_urls_isolates_single_failure(monkeypatch):
     def fake_scrape(url, max_chars=None):
         if url.endswith("boom"):
@@ -121,3 +173,34 @@ def test_scrape_urls_aggregates_and_preserves_order(monkeypatch):
     assert out["results"][1]["error"] == "failed"
     assert out["metadata"] == {"scraped_count": 2, "failed_count": 1}
     assert out["scrape_chain_used"] == ["jina"]
+
+
+def test_direct_extracts_js_content():
+    html = (
+        '<html><head><title>t</title></head><body>'
+        '<div id="js_content"><div>foo</div><p>bar &nbsp;baz</p></div>'
+        '<div class="rich_media_tool">ignored</div>'
+        '</body></html>'
+    )
+    assert direct_scraper._extract_article(html) == "foo bar baz"
+
+
+def test_direct_falls_back_to_full_page():
+    html = "<html><body><p>plain content</p><script>var x=1;</script></body></html>"
+    assert direct_scraper._extract_article(html) == "plain content"
+
+
+def test_direct_marks_antibot_page_as_failed(monkeypatch):
+    class FakeResp:
+        text = '<div id="js_content">环境异常，完成验证后即可继续访问</div>'
+
+        def raise_for_status(self):
+            pass
+
+    monkeypatch.setattr(
+        direct_scraper.requests, "get",
+        lambda *a, **k: FakeResp(),
+    )
+    result = direct_scraper.scrape("https://mp.weixin.qq.com/s/abc")
+    assert result.markdown is None
+    assert result.error == "Blocked by anti-scraping page"

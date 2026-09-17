@@ -11,6 +11,10 @@ def _get_env(name: str, default: Optional[str] = None) -> Optional[str]:
 BRAVE_API_KEY: Optional[str] = _get_env("BRAVE_API_KEY")
 FIRECRAWL_API_KEY: Optional[str] = _get_env("FIRECRAWL_API_KEY")
 TAVILY_API_KEY: Optional[str] = _get_env("TAVILY_API_KEY")
+PARALLEL_API_KEY: Optional[str] = _get_env("PARALLEL_API_KEY")
+
+# Parallel AI search mode: turbo | fast | basic | advanced (fast = ~700ms, recommended)
+PARALLEL_SEARCH_MODE: str = _get_env("PARALLEL_SEARCH_MODE", "fast")
 
 # Service settings
 HOST: str = _get_env("JIM_SEARCH_HOST", "0.0.0.0")
@@ -26,8 +30,12 @@ if HTTP_PROXY or HTTPS_PROXY:
     if HTTPS_PROXY:
         PROXIES["https"] = HTTPS_PROXY
 
-# Provider order: random = 随机均衡免费额度; sequential = 固定 Brave→Firecrawl→Tavily
+# Provider order: random = 随机均衡免费额度; sequential = 固定 Brave→Firecrawl→Tavily→Parallel;
+# 或显式逗号列表（如 tavily,parallel）——未列出的 provider 直接退出链，DuckDuckGo 未列出时自动兜底
 SEARCH_PROVIDER_ORDER: str = _get_env("JIM_SEARCH_PROVIDER_ORDER", "random")
+
+# Timezone for the provider circuit breaker's "next local midnight" recovery.
+TIMEZONE: str = _get_env("TZ", "Asia/Shanghai")
 
 # Static bearer token for /search, /scrape and /mcp. Empty = auth disabled (local use only).
 AUTH_TOKEN: str = (_get_env("JIM_SEARCH_AUTH_TOKEN", "") or "").strip()
