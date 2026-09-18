@@ -4,8 +4,8 @@
 
 搜索源由 `JIM_SEARCH_PROVIDER_ORDER` 控制：
 
-- `random`（默认）：Brave / Firecrawl / Tavily / Parallel 每次随机打散，均衡免费额度
-- `sequential`：固定 Brave → Firecrawl → Tavily → Parallel
+- `random`（默认）：Brave / Firecrawl / Tavily / Parallel / Baidu 每次随机打散，均衡免费额度
+- `sequential`：固定 Brave → Firecrawl → Tavily → Parallel → Baidu
 - 逗号列表（如 `tavily,brave`）：严格按列出顺序，未列出的源不参与
 
 DuckDuckGo 始终最后兜底（除非在显式列表中点名）。`random` / `sequential` 会跳过**未配置 key**或**当天额度/鉴权失败（熔断至次日 00:00）**的源；显式列表不跳过，按点名顺序照试。
@@ -106,6 +106,7 @@ X-API-Key: <token>
 | `TAVILY_API_KEY` | Tavily API key |
 | `PARALLEL_API_KEY` | Parallel AI API key（`https://platform.parallel.ai/`），用于 Search 与 Extract 抓取 |
 | `PARALLEL_SEARCH_MODE` | Parallel 搜索模式 `turbo`/`fast`/`basic`/`advanced`，默认 `fast` |
+| `BAIDU_API_KEY` | 百度千帆 AI 搜索 API key（`https://console.bce.baidu.com/qianfan/`），每日免费 100 次；只取搜索结果时 provider 不传 `model` |
 | `HTTP_PROXY` / `HTTPS_PROXY` | 出站代理，默认 `http://127.0.0.1:7890` |
 | `JIM_SEARCH_PROVIDER_ORDER` | `random`（默认）、`sequential` 或显式逗号列表（如 `tavily,brave`） |
 | `JIM_SEARCH_SCRAPE_CONCURRENCY` | 抓取并发数，默认 5 |

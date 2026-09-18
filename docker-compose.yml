@@ -17,6 +17,8 @@ services:
       - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY:-}
       - TAVILY_API_KEY=${TAVILY_API_KEY:-}
       - PARALLEL_API_KEY=${PARALLEL_API_KEY:-}
+      # 百度千帆 AI 搜索（每日免费 100 次）；key 配在 .env 里
+      - BAIDU_API_KEY=${BAIDU_API_KEY:-}
       - PARALLEL_SEARCH_MODE=${PARALLEL_SEARCH_MODE:-fast}
       - HTTP_PROXY=${HTTP_PROXY:-http://127.0.0.1:7890}
       - HTTPS_PROXY=${HTTPS_PROXY:-http://127.0.0.1:7890}

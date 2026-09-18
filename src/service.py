@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 
 from src import config
 from src.providers import ProviderQuotaError, SearchResult, normalize_url
-from src.providers import brave, firecrawl as firecrawl_search, tavily, parallel, duckduckgo
+from src.providers import brave, firecrawl as firecrawl_search, tavily, parallel, duckduckgo, baidu
 from src.scrapers import ScrapeResult
 from src.scrapers import (
     jina as jina_scraper,
@@ -41,11 +41,12 @@ _REGISTRY = {
     "firecrawl": firecrawl_search.search,
     "tavily": tavily.search,
     "parallel": parallel.search,
+    "baidu": baidu.search,
     "duckduckgo": duckduckgo.search,
 }
 
 # Paid providers, in the fixed order used by the ``sequential`` mode.
-_PAID_PROVIDERS = ("brave", "firecrawl", "tavily", "parallel")
+_PAID_PROVIDERS = ("brave", "firecrawl", "tavily", "parallel", "baidu")
 
 # Config attribute holding each provider's API key. Providers absent from this
 # map (DuckDuckGo) have no key and are always considered configured.
@@ -54,6 +55,7 @@ _PROVIDER_KEY_ATTR = {
     "firecrawl": "FIRECRAWL_API_KEY",
     "tavily": "TAVILY_API_KEY",
     "parallel": "PARALLEL_API_KEY",
+    "baidu": "BAIDU_API_KEY",
 }
 
 # Provider name -> timestamp it recovers after an auth/quota failure. Guarded by

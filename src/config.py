@@ -12,6 +12,8 @@ BRAVE_API_KEY: Optional[str] = _get_env("BRAVE_API_KEY")
 FIRECRAWL_API_KEY: Optional[str] = _get_env("FIRECRAWL_API_KEY")
 TAVILY_API_KEY: Optional[str] = _get_env("TAVILY_API_KEY")
 PARALLEL_API_KEY: Optional[str] = _get_env("PARALLEL_API_KEY")
+# 百度千帆「智能搜索生成」（每日免费 100 次，超出 0.036 元/次）
+BAIDU_API_KEY: Optional[str] = _get_env("BAIDU_API_KEY")
 
 # Parallel AI search mode: turbo | fast | basic | advanced (fast = ~700ms, recommended)
 PARALLEL_SEARCH_MODE: str = _get_env("PARALLEL_SEARCH_MODE", "fast")
