@@ -1,4 +1,5 @@
 """Configuration loaded from environment variables."""
+import json
 import os
 from typing import Optional
 
@@ -59,3 +60,49 @@ MIN_CONTENT_LENGTH: int = int(_get_env("JIM_SEARCH_MIN_CONTENT_LENGTH", "200"))
 # Scrape tuning: concurrent workers and per-page truncation (0 = unlimited)
 SCRAPE_CONCURRENCY: int = int(_get_env("JIM_SEARCH_SCRAPE_CONCURRENCY", "5"))
 MAX_CHARS: int = int(_get_env("JIM_SEARCH_MAX_CHARS", "20000"))
+
+
+# --- Cookie support ---------------------------------------------------------
+def _json_dict_env(name: str, default: dict) -> dict:
+    raw = (_get_env(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        parsed = json.loads(raw)
+    except ValueError:
+        return default
+    return parsed if isinstance(parsed, dict) else default
+
+
+def _csv_env(name: str, default: str) -> list:
+    raw = _get_env(name)
+    raw = default if raw is None else raw
+    return [item.strip().lower().lstrip(".") for item in raw.split(",") if item.strip()]
+
+
+# Domain -> cookie file stem. {"toutiao.com": "toutiao"} reads
+# cookies/cookie.toutiao.txt and applies to toutiao.com and its subdomains.
+# Zhihu is deliberately absent: its anti-bot is a JS challenge, so a direct
+# request fails no matter what cookie is attached (see JINA_ONLY_DOMAINS).
+DEFAULT_COOKIE_MAP = {
+    "toutiao.com": "toutiao",
+    "baidu.com": "baidu",
+    "weibo.com": "weibo",
+}
+COOKIE_MAP: dict = _json_dict_env("JIM_SEARCH_COOKIE_MAP", DEFAULT_COOKIE_MAP)
+
+# Directory holding cookie.<name>.txt (mounted read-only into the container).
+COOKIE_DIR: str = (_get_env("JIM_SEARCH_COOKIE_DIR", "") or "").strip()
+
+# Domains whose anti-bot is a JS challenge. Direct HTTP can never pass, so the
+# direct channel is skipped entirely and the request goes straight to jina.
+JINA_ONLY_DOMAINS: list = _csv_env("JIM_SEARCH_JINA_ONLY_DOMAINS", "zhihu.com")
+
+# Try the cookie-bearing direct channel before the jina/paid scrapers. Cheap
+# and fast when the cookie is valid; falls through to the normal chain when not.
+COOKIE_FIRST: bool = (_get_env("JIM_SEARCH_COOKIE_FIRST", "true") or "").strip().lower() not in (
+    "0",
+    "false",
+    "no",
+    "off",
+)

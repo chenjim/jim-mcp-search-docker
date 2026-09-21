@@ -10,6 +10,10 @@ services:
     container_name: jim-search-mcp
     restart: unless-stopped
     network_mode: host
+    volumes:
+      # cookie.<name>.txt 按域名挂进容器（只读）。域名→文件名映射由
+      # JIM_SEARCH_COOKIE_MAP 决定（默认 toutiao/baidu/weibo）。
+      - ./cookies:/app/cookies:ro
     environment:
       - JIM_SEARCH_HOST=0.0.0.0
       - JIM_SEARCH_PORT=17492
@@ -32,6 +36,13 @@ services:
       - JIM_SEARCH_ALLOWED_HOSTS=${JIM_SEARCH_ALLOWED_HOSTS:-localhost,127.0.0.1,192.168.31.165}
       # 熔断恢复时间按本地午夜计算，需与宿主机时区一致
       - TZ=${TZ:-Asia/Shanghai}
+      # Cookie 通道：域名→cookie 文件名映射用代码默认值（toutiao/baidu/weibo），
+      # 需要覆盖时在 .env 里设 JIM_SEARCH_COOKIE_MAP='{"example.com":"example"}'
+      - JIM_SEARCH_COOKIE_DIR=/app/cookies
+      # 这些域名只走 jina：直连注定过不了 JS 挑战（知乎 zse_ck）
+      - JIM_SEARCH_JINA_ONLY_DOMAINS=${JIM_SEARCH_JINA_ONLY_DOMAINS:-zhihu.com}
+      # 命中 cookie 的域名是否优先直连（省 jina/付费额度）
+      - JIM_SEARCH_COOKIE_FIRST=${JIM_SEARCH_COOKIE_FIRST:-true}
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://127.0.0.1:17492/health', timeout=5)"]
       interval: 30s

@@ -1,11 +1,17 @@
 """Direct HTTP scraper (browser UA) for sites that block crawler UA/IPs.
 
-Dedicated channel for mp.weixin.qq.com and final fallback for other domains.
+Three roles:
+- dedicated channel for mp.weixin.qq.com (jina/Firecrawl both get the WeChat
+  anti-scraping page, a plain browser UA does not)
+- cookie-bearing channel for domains listed in ``JIM_SEARCH_COOKIE_MAP``
+- final fallback for every other domain
+
 Zero dependencies beyond requests + stdlib.
 """
 import html as html_lib
 import logging
 import re
+from urllib.parse import urlparse
 
 import requests
 
@@ -20,7 +26,15 @@ BROWSER_UA = (
 )
 
 # 命中即视为抓取到了反爬/占位页，而非真实正文
-BLOCKED_MARKERS = ("环境异常", "完成验证", "captcha", "访问过于频繁")
+BLOCKED_MARKERS = ("环境异常", "完成验证", "captcha", "访问过于频繁", "zse-ck")
+
+# 反爬/占位页都是几百字节到几 KB 的壳页。长页面里出现 captcha 之类的词，
+# 多半只是站内 JS 的变量名（实测今日头条正常页面也含），不能据此判失败。
+BLOCKED_MAX_LEN = 3000
+
+# 被重定向到登录/访客墙（cookie 过期时的典型表现，且常常返回 200）
+AUTH_WALL_HOST_PREFIXES = ("login.", "passport.", "sso.", "auth.")
+AUTH_WALL_MARKERS = ("Sina Visitor System", "请先登录", "登录后查看", "请登录后")
 
 
 def _extract_article(html_text: str) -> str:
@@ -51,11 +65,34 @@ def _extract_article(html_text: str) -> str:
     return re.sub(r"\s+", " ", body).strip()
 
 
-def scrape(url: str) -> ScrapeResult:
+def looks_blocked(text: str) -> bool:
+    """反爬/占位页判定：只有短页面命中特征词才算，避免误杀正常长页面。"""
+    if not text or len(text) > BLOCKED_MAX_LEN:
+        return False
+    return any(marker in text for marker in BLOCKED_MARKERS)
+
+
+def _is_auth_wall(final_url: str, html_text: str) -> bool:
+    """Cookie 过期时站点常返回 200 + 登录页，长度还超过阈值，需单独识别。"""
+    host = (urlparse(final_url).hostname or "").lower()
+    if any(host.startswith(prefix) for prefix in AUTH_WALL_HOST_PREFIXES):
+        return True
+    head = html_text[:4000]
+    return any(marker in head for marker in AUTH_WALL_MARKERS)
+
+
+def scrape(url: str, cookie: str = "", referer: str = "") -> ScrapeResult:
+    """Fetch ``url`` directly. ``cookie``/``referer`` are injected when given."""
+    headers = {"User-Agent": BROWSER_UA}
+    if cookie:
+        headers["Cookie"] = cookie
+    if referer:
+        headers["Referer"] = referer
+
     try:
         resp = requests.get(
             url,
-            headers={"User-Agent": BROWSER_UA},
+            headers=headers,
             proxies=config.PROXIES,
             timeout=config.SCRAPE_TIMEOUT,
             allow_redirects=True,
@@ -66,8 +103,17 @@ def scrape(url: str) -> ScrapeResult:
         logger.warning("Direct scrape failed for %s: %s", url, exc)
         return ScrapeResult(markdown=None, source="direct", error=str(exc))
 
+    if _is_auth_wall(resp.url, text):
+        host = urlparse(resp.url).hostname
+        logger.warning("Direct scrape hit login wall for %s -> %s", url, host)
+        return ScrapeResult(
+            markdown=None,
+            source="direct",
+            error=f"Redirected to login/visitor wall ({host}); cookie likely expired",
+        )
+
     markdown = _extract_article(text)
-    if any(marker in markdown for marker in BLOCKED_MARKERS):
+    if looks_blocked(markdown):
         return ScrapeResult(markdown=None, source="direct", error="Blocked by anti-scraping page")
     if len(markdown) < config.MIN_CONTENT_LENGTH:
         return ScrapeResult(

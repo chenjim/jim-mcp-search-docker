@@ -27,3 +27,8 @@ build/
 Thumbs.db
 
 # Docker
+
+# Cookie jars（含登录态，绝不入库）
+cookies/
+cookie.*.txt
+

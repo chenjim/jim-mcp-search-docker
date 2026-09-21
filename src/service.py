@@ -13,7 +13,7 @@ from typing import List, Optional
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
-from src import config
+from src import config, cookies
 from src.providers import ProviderQuotaError, SearchResult, normalize_url
 from src.providers import brave, firecrawl as firecrawl_search, tavily, parallel, duckduckgo, baidu
 from src.scrapers import ScrapeResult
@@ -207,9 +207,12 @@ def _is_wechat(url: str) -> bool:
 
 
 def _is_blocked(markdown: str) -> bool:
-    """命中反爬/占位页特征词即视为抓取失败，继续 fallback。"""
-    markers = ("环境异常", "完成验证", "captcha", "访问过于频繁")
-    return any(marker in markdown for marker in markers)
+    """命中反爬/占位页特征词即视为抓取失败，继续 fallback。
+
+    判定与 direct 通道共用：反爬页都是短壳页，长页面里的 captcha 字样
+    通常只是站内 JS 变量名（实测今日头条正常页面也含），不能据此判失败。
+    """
+    return direct_scraper.looks_blocked(markdown)
 
 
 def _finish(result: ScrapeResult, max_chars: Optional[int]) -> ScrapeResult:
@@ -223,11 +226,28 @@ def _finish(result: ScrapeResult, max_chars: Optional[int]) -> ScrapeResult:
 def scrape_one(url: str, max_chars: Optional[int] = None) -> ScrapeResult:
     """Scrape a single URL.
 
-    微信域名直接走 direct 通道；其他域名按 jina → Parallel → Firecrawl → direct 兜底。
-    反爬/占位页内容（即便长度达标）也会被判失败继续 fallback。
+    通道选择：
+    - 微信域名 → direct 专用通道（jina/Firecrawl 都拿不到微信正文）
+    - 配了 cookie 的域名 → 优先带 cookie 直连（快且省 jina/付费额度），失败再走常规链路
+    - JINA_ONLY_DOMAINS（默认 zhihu.com）→ 跳过 direct，直连注定过不了 JS 挑战
+    - 其余 → jina → Parallel → Firecrawl → direct 兜底
+
+    反爬/占位页内容（短壳页命中特征词）会被判失败并继续 fallback。
     """
     if _is_wechat(url):
         return _finish(direct_scraper.scrape(url), max_chars)
+
+    jina_only = cookies.matches_domain(url, config.JINA_ONLY_DOMAINS)
+    cookie_name = cookies.cookie_name_for(url, config.COOKIE_MAP)
+    cookie = cookies.load_cookie(cookie_name) if cookie_name else ""
+    direct_tried = False
+
+    if cookie and config.COOKIE_FIRST:
+        direct_tried = True
+        result = direct_scraper.scrape(url, cookie=cookie, referer=cookies.referer_for(url))
+        if result.markdown and not _is_blocked(result.markdown):
+            return _finish(result, max_chars)
+        logger.info("Cookie direct scrape missed for %s: %s", url, result.error)
 
     for scraper in (jina_scraper, parallel_scraper, firecrawl_scraper):
         result = scraper.scrape(url)
@@ -235,6 +255,9 @@ def scrape_one(url: str, max_chars: Optional[int] = None) -> ScrapeResult:
             return _finish(result, max_chars)
         logger.info("Scraper %s skipped for %s: %s", result.source, url, result.error)
 
+    if jina_only or direct_tried:
+        reason = "jina-only domain, direct skipped" if jina_only else "cookie direct already tried"
+        return ScrapeResult(markdown=None, source="", error=f"All channels failed ({reason})")
     return _finish(direct_scraper.scrape(url), max_chars)
 
 
