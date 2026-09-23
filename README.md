@@ -94,7 +94,7 @@ X-API-Key: <token>
 
 - token 由 `JIM_SEARCH_AUTH_TOKEN` 配置；为空则关闭鉴权（**仅限本机使用**）。
 - 生成 token：`python3 -c "import secrets; print(secrets.token_urlsafe(32))"`。
-- 其他机器上可直接用 `.agents/skills/jim-search-skill/scripts/jimsearch.py`（纯标准库，无需额外依赖）当客户端：读 `JIM_SEARCH_BASE_URL`（远端地址）与 `JIM_SEARCH_AUTH_TOKEN`，也可把 token 写入 `~/.config/jim-search/token`。
+- 其他机器上可直接用 skill `jim-search-skill` 里的 `scripts/jimsearch.py`（纯标准库，无需额外依赖）当客户端：读 `JIM_SEARCH_BASE_URL`（远端地址）与 `JIM_SEARCH_AUTH_TOKEN`，也可把 token 写入 `~/.config/jim-search/token`。
 - 对外暴露务必置于 HTTPS 反向代理（nginx/caddy）之后，避免 token 明文传输；建议同时在反代层做访问日志与限流。
 
 ## 环境变量
