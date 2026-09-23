@@ -1,8 +1,6 @@
 ---
 name: jim-search-skill
-description: |-
-  jim-search 本地搜索/抓取服务的接口手册——HTTP API、MCP 工具、参数、抓取通道、cookie、运维与排障。
-  触发：要调 jim-search、问搜索/抓取接口怎么用、MCP 怎么配、抓取失败或 401/503 怎么排查。
+description: "调 jim-search 服务时查：HTTP API/MCP 用法、cookie、401/503 排障。"
 ---
 
 # jim-search-skill
