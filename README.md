@@ -7,8 +7,10 @@
 - `random`（默认）：Brave / Firecrawl / Tavily / Parallel / Baidu 每次随机打散，均衡免费额度
 - `sequential`：固定 Brave → Firecrawl → Tavily → Parallel → Baidu
 - 逗号列表（如 `tavily,brave`）：严格按列出顺序，未列出的源不参与
+- `shuffle:<列表>`（如 `shuffle:brave,tavily,parallel,baidu`）：成员仅限列出的源，次序每次请求随机——
+  用于「指定成员内均衡免费额度、但要把某个源（如 firecrawl）排除在搜索外」的场景
 
-DuckDuckGo 始终最后兜底（除非在显式列表中点名）。`random` / `sequential` 会跳过**未配置 key**或**当天额度/鉴权失败（熔断至次日 00:00）**的源；显式列表不跳过，按点名顺序照试。
+DuckDuckGo 始终最后兜底（除非在显式列表中点名）。`random` / `sequential` 会跳过**未配置 key**或**当天额度/鉴权失败（熔断至次日 00:00）**的源；显式列表与 `shuffle:` 不跳过，按点名顺序照试。
 
 全文抓取 fallback 顺序：
 
@@ -108,7 +110,7 @@ X-API-Key: <token>
 | `PARALLEL_SEARCH_MODE` | Parallel 搜索模式 `turbo`/`fast`/`basic`/`advanced`，默认 `fast` |
 | `BAIDU_API_KEY` | 百度千帆 AI 搜索 API key（`https://console.bce.baidu.com/qianfan/`），每日免费 100 次；只取搜索结果时 provider 不传 `model` |
 | `HTTP_PROXY` / `HTTPS_PROXY` | 出站代理，默认 `http://127.0.0.1:7890` |
-| `JIM_SEARCH_PROVIDER_ORDER` | `random`（默认）、`sequential` 或显式逗号列表（如 `tavily,brave`） |
+| `JIM_SEARCH_PROVIDER_ORDER` | `random`（默认）、`sequential`、显式逗号列表（如 `tavily,brave`）或 `shuffle:<列表>`（指定成员内随机次序） |
 | `JIM_SEARCH_SCRAPE_CONCURRENCY` | 抓取并发数，默认 5 |
 | `JIM_SEARCH_MAX_CHARS` | 单页截断长度，默认 20000，0 不限 |
 | `JIM_SEARCH_MIN_CONTENT_LENGTH` | 判定抓取成功的最小字符数，默认 200 |

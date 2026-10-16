@@ -111,11 +111,18 @@ def _provider_chain():
     evenly; ``sequential`` keeps the fixed Brave → Firecrawl → Tavily → Parallel
     order. An explicit comma-separated list (e.g. ``tavily,brave``) is honoured
     as-is — those providers are tried even when unconfigured or tripped, since
-    the user named them. DuckDuckGo is always appended last as the zero-cost
-    fallback unless it is listed explicitly.
+    the user named them. A ``shuffle:`` prefixed list (e.g.
+    ``shuffle:brave,tavily,parallel,baidu``) restricts membership to the named
+    providers but randomises their order per request, spreading free quota
+    evenly across exactly that set. DuckDuckGo is always appended last as the
+    zero-cost fallback unless it is listed explicitly.
     """
     setting = (config.SEARCH_PROVIDER_ORDER or "random").strip().lower()
     names: List[str]
+    shuffled = False
+    if setting.startswith("shuffle:"):
+        setting = setting.split(":", 1)[1].strip()
+        shuffled = True
     if setting == "random":
         names = [name for name in _PAID_PROVIDERS if _is_available(name)]
         random.shuffle(names)
@@ -133,6 +140,8 @@ def _provider_chain():
                 continue
             if name not in names:
                 names.append(name)
+        if shuffled and names:
+            random.shuffle(names)
     if "duckduckgo" not in names:
         names.append("duckduckgo")
     logger.info("Provider order: %s", names)
