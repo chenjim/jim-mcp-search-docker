@@ -1,3 +1,5 @@
+# 开机自启：restart 刻意为 "no" —— dockerd 开机会把带策略的容器一波并行恢复，
+# 全机容器统一由宿主 ~/.local/bin/stagger-containers.sh（root crontab @reboot）自动分批拉起
 services:
   jim-search:
     build:
@@ -8,7 +10,7 @@ services:
         - HTTPS_PROXY=${HTTPS_PROXY:-http://127.0.0.1:7890}
     image: jim-search:latest
     container_name: jim-search-mcp
-    restart: unless-stopped
+    restart: "no"
     network_mode: host
     volumes:
       # cookie.<name>.txt 按域名挂进容器（只读）。域名→文件名映射由
