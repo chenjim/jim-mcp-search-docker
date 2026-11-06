@@ -8,6 +8,12 @@ def _get_env(name: str, default: Optional[str] = None) -> Optional[str]:
     return os.environ.get(name, default)
 
 
+def _csv_env(name: str, default: str) -> list:
+    raw = _get_env(name)
+    raw = default if raw is None else raw
+    return [item.strip().lower().lstrip(".") for item in raw.split(",") if item.strip()]
+
+
 # Search provider API keys
 BRAVE_API_KEY: Optional[str] = _get_env("BRAVE_API_KEY")
 FIRECRAWL_API_KEY: Optional[str] = _get_env("FIRECRAWL_API_KEY")
@@ -15,6 +21,8 @@ TAVILY_API_KEY: Optional[str] = _get_env("TAVILY_API_KEY")
 PARALLEL_API_KEY: Optional[str] = _get_env("PARALLEL_API_KEY")
 # 百度千帆「智能搜索生成」（每日免费 100 次，超出 0.036 元/次）
 BAIDU_API_KEY: Optional[str] = _get_env("BAIDU_API_KEY")
+# DeepSeek 独立 Search/Fetch API（$0.75/1000 次成功请求，失败/空结果不计费）
+DEEPSEEK_API_KEY: Optional[str] = _get_env("DEEPSEEK_API_KEY")
 
 # Parallel AI search mode: turbo | fast | basic | advanced (fast = ~700ms, recommended)
 PARALLEL_SEARCH_MODE: str = _get_env("PARALLEL_SEARCH_MODE", "fast")
@@ -36,6 +44,15 @@ if HTTP_PROXY or HTTPS_PROXY:
 # Provider order: random = 随机均衡免费额度; sequential = 固定 Brave→Firecrawl→Tavily→Parallel;
 # 或显式逗号列表（如 tavily,parallel）——未列出的 provider 直接退出链，DuckDuckGo 未列出时自动兜底
 SEARCH_PROVIDER_ORDER: str = _get_env("JIM_SEARCH_PROVIDER_ORDER", "random")
+
+# 兜底源（逗号分隔）：不进日常轮转，主链全部失败/空结果时才试，排在 DuckDuckGo 之前。
+# 未配置 key 或已熔断的源会被跳过。
+FALLBACK_PROVIDERS: list = _csv_env("JIM_SEARCH_FALLBACK_PROVIDERS", "")
+
+# 结构化请求日志目录（JSONL，按天分文件）；留空则关闭。
+# 容器内由 compose 挂载 ./logs:/app/logs。
+LOG_DIR: str = (_get_env("JIM_SEARCH_LOG_DIR", "") or "").strip()
+LOG_RETENTION_DAYS: int = int(_get_env("JIM_SEARCH_LOG_RETENTION_DAYS", "30"))
 
 # Timezone for the provider circuit breaker's "next local midnight" recovery.
 TIMEZONE: str = _get_env("TZ", "Asia/Shanghai")
@@ -72,12 +89,6 @@ def _json_dict_env(name: str, default: dict) -> dict:
     except ValueError:
         return default
     return parsed if isinstance(parsed, dict) else default
-
-
-def _csv_env(name: str, default: str) -> list:
-    raw = _get_env(name)
-    raw = default if raw is None else raw
-    return [item.strip().lower().lstrip(".") for item in raw.split(",") if item.strip()]
 
 
 # Domain -> cookie file stem. {"toutiao.com": "toutiao"} reads

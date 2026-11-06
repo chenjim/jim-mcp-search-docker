@@ -106,3 +106,41 @@ def test_search_does_not_trip_breaker_on_transient_error(monkeypatch):
 def test_breaker_recovers_at_next_local_midnight():
     service._trip_breaker("tavily")
     assert service._COOLDOWN_UNTIL["tavily"] == pytest.approx(service._next_midnight_ts(), abs=5)
+
+
+def test_fallback_provider_appended_before_duckduckgo(monkeypatch):
+    _set_keys(monkeypatch, **ALL_KEYS, DEEPSEEK_API_KEY="k")
+    monkeypatch.setattr(config, "SEARCH_PROVIDER_ORDER", "sequential")
+    monkeypatch.setattr(config, "FALLBACK_PROVIDERS", ["deepseek"])
+    names = [name for name, _ in service._provider_chain()]
+    assert names[-2:] == ["deepseek", "duckduckgo"]
+
+
+def test_fallback_provider_skipped_without_key(monkeypatch):
+    _set_keys(monkeypatch, **ALL_KEYS, DEEPSEEK_API_KEY=None)
+    monkeypatch.setattr(config, "SEARCH_PROVIDER_ORDER", "sequential")
+    monkeypatch.setattr(config, "FALLBACK_PROVIDERS", ["deepseek"])
+    assert [name for name, _ in service._provider_chain()] == [
+        "brave",
+        "firecrawl",
+        "tavily",
+        "parallel",
+        "duckduckgo",
+    ]
+
+
+def test_fallback_provider_skipped_when_tripped(monkeypatch):
+    _set_keys(monkeypatch, **ALL_KEYS, DEEPSEEK_API_KEY="k")
+    monkeypatch.setattr(config, "SEARCH_PROVIDER_ORDER", "sequential")
+    monkeypatch.setattr(config, "FALLBACK_PROVIDERS", ["deepseek"])
+    service._trip_breaker("deepseek")
+    assert [name for name, _ in service._provider_chain()][-1] == "duckduckgo"
+    assert "deepseek" not in [name for name, _ in service._provider_chain()]
+
+
+def test_fallback_not_duplicated_when_named_in_chain(monkeypatch):
+    _set_keys(monkeypatch, **ALL_KEYS, DEEPSEEK_API_KEY="k")
+    monkeypatch.setattr(config, "SEARCH_PROVIDER_ORDER", "brave,deepseek")
+    monkeypatch.setattr(config, "FALLBACK_PROVIDERS", ["deepseek"])
+    names = [name for name, _ in service._provider_chain()]
+    assert names.count("deepseek") == 1

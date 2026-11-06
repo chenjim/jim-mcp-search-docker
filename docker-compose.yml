@@ -16,6 +16,8 @@ services:
       # cookie.<name>.txt 按域名挂进容器（只读）。域名→文件名映射由
       # JIM_SEARCH_COOKIE_MAP 决定（默认 toutiao/baidu/weibo）。
       - ./cookies:/app/cookies:ro
+      # 结构化请求日志（search/scrape 的 query 与结果明细，JSONL 按天分文件）
+      - ./logs:/app/logs
     environment:
       - JIM_SEARCH_HOST=0.0.0.0
       - JIM_SEARCH_PORT=17492
@@ -25,10 +27,16 @@ services:
       - PARALLEL_API_KEY=${PARALLEL_API_KEY:-}
       # 百度千帆 AI 搜索（每日免费 100 次）；key 配在 .env 里
       - BAIDU_API_KEY=${BAIDU_API_KEY:-}
+      # DeepSeek 独立 Search/Fetch API（$0.75/1000 次成功请求）；key 配在 .env 里
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
       - PARALLEL_SEARCH_MODE=${PARALLEL_SEARCH_MODE:-fast}
       - HTTP_PROXY=${HTTP_PROXY:-http://127.0.0.1:7890}
       - HTTPS_PROXY=${HTTPS_PROXY:-http://127.0.0.1:7890}
       - JIM_SEARCH_PROVIDER_ORDER=${JIM_SEARCH_PROVIDER_ORDER:-random}
+      # 兜底源：主链全失败/空结果时才试，位于 DuckDuckGo 之前
+      - JIM_SEARCH_FALLBACK_PROVIDERS=${JIM_SEARCH_FALLBACK_PROVIDERS:-deepseek}
+      - JIM_SEARCH_LOG_DIR=/app/logs
+      - JIM_SEARCH_LOG_RETENTION_DAYS=${JIM_SEARCH_LOG_RETENTION_DAYS:-30}
       - JIM_SEARCH_TIMEOUT=${JIM_SEARCH_TIMEOUT:-30}
       - JIM_SEARCH_SCRAPE_TIMEOUT=${JIM_SEARCH_SCRAPE_TIMEOUT:-60}
       - JIM_SEARCH_MIN_CONTENT_LENGTH=${JIM_SEARCH_MIN_CONTENT_LENGTH:-200}

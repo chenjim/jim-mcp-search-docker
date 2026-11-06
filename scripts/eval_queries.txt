@@ -1,0 +1,32 @@
+# 多源评测 query 集：一行一条，# 开头为注释。
+# 目标是覆盖不同检索需求，而不是覆盖某个具体事实；结论看 matrix.md 的人工判断。
+# 改完直接跑 scripts/eval_providers.py，无需改代码。
+
+# 中文时效类
+2026年11月 中国 CPI 同比 数据
+2026年11月 人工智能 监管 新规 发布
+
+# 中文政策 / 民生
+个人养老金 缴费上限 2026 政策
+京杭大运河 全长 起点 终点
+
+# 中文技术 / 垂直
+视频号 视频直链 解析 接口 API
+公众号 文章 排版 规范 字号 行距
+
+# 中文健康 / 争议
+咖啡 致癌 研究 结论 权威
+
+# 英文官方文档
+Playwright browser_navigate API documentation
+PostgreSQL 18 release notes
+
+# 英文版本 / 规格
+Mac Studio M5 Ultra specs memory bandwidth
+DeepSeek V4 Flash pricing per million tokens
+
+# 英文长尾技术
+kubectl debug ephemeral container example
+
+# 英文评测 / 购物
+best budget mechanical keyboard 2026 review

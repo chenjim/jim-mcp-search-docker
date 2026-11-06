@@ -57,7 +57,7 @@ async def web_scrape(
     max_chars: Optional[int] = None,
     concurrency: Optional[int] = None,
 ) -> str:
-    """Fetch full page content as markdown for one or more URLs (jina.ai -> Parallel -> Firecrawl fallback).
+    """Fetch full page content as markdown for one or more URLs (jina.ai -> DeepSeek Fetch -> Parallel -> Firecrawl fallback).
 
     Args:
         urls: URLs to fetch. They are scraped concurrently.

@@ -13,12 +13,21 @@ from typing import List, Optional
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
-from src import config, cookies
+from src import config, cookies, recorder
 from src.providers import ProviderQuotaError, SearchResult, normalize_url
-from src.providers import brave, firecrawl as firecrawl_search, tavily, parallel, duckduckgo, baidu
+from src.providers import (
+    brave,
+    firecrawl as firecrawl_search,
+    tavily,
+    parallel,
+    duckduckgo,
+    baidu,
+    deepseek,
+)
 from src.scrapers import ScrapeResult
 from src.scrapers import (
     jina as jina_scraper,
+    deepseek as deepseek_scraper,
     parallel as parallel_scraper,
     firecrawl as firecrawl_scraper,
     direct as direct_scraper,
@@ -42,10 +51,12 @@ _REGISTRY = {
     "tavily": tavily.search,
     "parallel": parallel.search,
     "baidu": baidu.search,
+    "deepseek": deepseek.search,
     "duckduckgo": duckduckgo.search,
 }
 
 # Paid providers, in the fixed order used by the ``sequential`` mode.
+# 兜底源（deepseek）不在这里：它只在主链全部失败后才被调用，见 FALLBACK_PROVIDERS。
 _PAID_PROVIDERS = ("brave", "firecrawl", "tavily", "parallel", "baidu")
 
 # Config attribute holding each provider's API key. Providers absent from this
@@ -56,6 +67,7 @@ _PROVIDER_KEY_ATTR = {
     "tavily": "TAVILY_API_KEY",
     "parallel": "PARALLEL_API_KEY",
     "baidu": "BAIDU_API_KEY",
+    "deepseek": "DEEPSEEK_API_KEY",
 }
 
 # Provider name -> timestamp it recovers after an auth/quota failure. Guarded by
@@ -104,6 +116,22 @@ def _is_available(name: str) -> bool:
     return not _is_cooling(name)
 
 
+def _fallback_names(names: List[str]) -> List[str]:
+    """``JIM_SEARCH_FALLBACK_PROVIDERS`` 中可用、且不在主链里的源。"""
+    extra: List[str] = []
+    for name in config.FALLBACK_PROVIDERS:
+        if not name or name in names or name in extra:
+            continue
+        if name not in _REGISTRY:
+            logger.warning("Unknown fallback provider %r in JIM_SEARCH_FALLBACK_PROVIDERS", name)
+            continue
+        if not _is_available(name):
+            logger.info("Fallback provider %s skipped (no key or tripped)", name)
+            continue
+        extra.append(name)
+    return extra
+
+
 def _provider_chain():
     """Build the ordered provider chain from ``JIM_SEARCH_PROVIDER_ORDER``.
 
@@ -114,8 +142,15 @@ def _provider_chain():
     the user named them. A ``shuffle:`` prefixed list (e.g.
     ``shuffle:brave,tavily,parallel,baidu``) restricts membership to the named
     providers but randomises their order per request, spreading free quota
-    evenly across exactly that set. DuckDuckGo is always appended last as the
-    zero-cost fallback unless it is listed explicitly.
+    evenly across exactly that set.
+
+    ``JIM_SEARCH_FALLBACK_PROVIDERS`` (default empty; e.g. ``deepseek``) is
+    appended after the main chain and before DuckDuckGo, so a cheap backstop is
+    only billed when the primary sources fail or return nothing. Fallbacks are
+    skipped when unconfigured or tripped.
+
+    DuckDuckGo is always appended last as the zero-cost fallback unless it is
+    listed explicitly.
     """
     setting = (config.SEARCH_PROVIDER_ORDER or "random").strip().lower()
     names: List[str]
@@ -142,6 +177,7 @@ def _provider_chain():
                 names.append(name)
         if shuffled and names:
             random.shuffle(names)
+    names.extend(name for name in _fallback_names(names) if name not in names)
     if "duckduckgo" not in names:
         names.append("duckduckgo")
     logger.info("Provider order: %s", names)
@@ -153,33 +189,56 @@ def search(query: str, top: int = 10, freshness: Optional[str] = None) -> dict:
     top = max(1, min(int(top), MAX_RESULTS))
     logger.info("Search request: q=%s top=%d freshness=%s", query, top, freshness)
 
+    chain = _provider_chain()
+    started = time.monotonic()
     raw_results: List[SearchResult] = []
     search_chain_used: List[str] = []
+    attempts: List[dict] = []
     last_error: Optional[str] = None
 
-    for name, provider_fn in _provider_chain():
+    for name, provider_fn in chain:
+        attempt_started = time.monotonic()
         try:
             results = provider_fn(query, count=top, freshness=freshness)
         except ProviderQuotaError as exc:
             # Auth/quota failure: stop wasting a fallback attempt per request today.
             _trip_breaker(name)
             last_error = str(exc)
+            attempts.append(
+                {
+                    "provider": name,
+                    "ms": int((time.monotonic() - attempt_started) * 1000),
+                    "count": 0,
+                    "error": str(exc),
+                    "quota": True,
+                }
+            )
             continue
         except Exception as exc:
             logger.warning("Provider %s raised exception: %s", name, exc)
             last_error = str(exc)
+            attempts.append(
+                {
+                    "provider": name,
+                    "ms": int((time.monotonic() - attempt_started) * 1000),
+                    "count": 0,
+                    "error": str(exc),
+                }
+            )
             continue
 
+        attempts.append(
+            {
+                "provider": name,
+                "ms": int((time.monotonic() - attempt_started) * 1000),
+                "count": len(results),
+            }
+        )
         if results:
             raw_results = results
             search_chain_used.append(name)
             break
         logger.info("Provider %s returned no results", name)
-
-    if not raw_results:
-        raise SearchError(
-            f"All search providers failed or returned no results. Last error: {last_error}"
-        )
 
     # Deduplicate by normalized URL and trim to top
     seen: set[str] = set()
@@ -191,6 +250,30 @@ def search(query: str, top: int = 10, freshness: Optional[str] = None) -> dict:
             results_out.append({"title": r.title, "url": r.url, "snippet": r.snippet})
         if len(results_out) >= top:
             break
+
+    entry = {
+        "event": "search",
+        "query": query,
+        "top": top,
+        "freshness": freshness,
+        "chain_planned": [name for name, _ in chain],
+        "attempts": attempts,
+        "chain_used": search_chain_used,
+        "elapsed_ms": int((time.monotonic() - started) * 1000),
+        "result_count": len(results_out),
+        "results": [
+            {"rank": i + 1, "title": r["title"], "url": r["url"], "snippet": r["snippet"]}
+            for i, r in enumerate(results_out)
+        ],
+    }
+    if not results_out:
+        entry["error"] = last_error or "All search providers returned no results"
+    recorder.record("search", entry)
+
+    if not raw_results:
+        raise SearchError(
+            f"All search providers failed or returned no results. Last error: {last_error}"
+        )
 
     return {
         "query": query,
@@ -239,7 +322,7 @@ def scrape_one(url: str, max_chars: Optional[int] = None) -> ScrapeResult:
     - 微信域名 → direct 专用通道（jina/Firecrawl 都拿不到微信正文）
     - 配了 cookie 的域名 → 优先带 cookie 直连（快且省 jina/付费额度），失败再走常规链路
     - JINA_ONLY_DOMAINS（默认 zhihu.com）→ 跳过 direct，直连注定过不了 JS 挑战
-    - 其余 → jina → Parallel → Firecrawl → direct 兜底
+    - 其余 → jina → DeepSeek Fetch → Parallel → Firecrawl → direct 兜底
 
     反爬/占位页内容（短壳页命中特征词）会被判失败并继续 fallback。
     """
@@ -258,7 +341,7 @@ def scrape_one(url: str, max_chars: Optional[int] = None) -> ScrapeResult:
             return _finish(result, max_chars)
         logger.info("Cookie direct scrape missed for %s: %s", url, result.error)
 
-    for scraper in (jina_scraper, parallel_scraper, firecrawl_scraper):
+    for scraper in (jina_scraper, deepseek_scraper, parallel_scraper, firecrawl_scraper):
         result = scraper.scrape(url)
         if result.markdown and not _is_blocked(result.markdown):
             return _finish(result, max_chars)
@@ -272,11 +355,26 @@ def scrape_one(url: str, max_chars: Optional[int] = None) -> ScrapeResult:
 
 def _safe_scrape_one(url: str, max_chars: Optional[int]) -> ScrapeResult:
     """Wrap scrape_one so a single failure can't abort the whole batch."""
+    started = time.monotonic()
     try:
-        return scrape_one(url, max_chars)
+        result = scrape_one(url, max_chars)
     except Exception as exc:
         logger.warning("Scrape raised for %s: %s", url, exc)
-        return ScrapeResult(markdown=None, source="", error=str(exc))
+        result = ScrapeResult(markdown=None, source="", error=str(exc))
+
+    recorder.record(
+        "scrape",
+        {
+            "event": "scrape",
+            "url": url,
+            "status": "ok" if result.markdown else "failed",
+            "source": result.source or None,
+            "chars": len(result.markdown or ""),
+            "elapsed_ms": int((time.monotonic() - started) * 1000),
+            "error": result.error,
+        },
+    )
+    return result
 
 
 def scrape_urls(

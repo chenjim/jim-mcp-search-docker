@@ -32,3 +32,7 @@ Thumbs.db
 cookies/
 cookie.*.txt
 
+
+# 请求日志与评测产物（含 query 与结果）
+logs/
+eval/
