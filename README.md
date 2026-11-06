@@ -54,7 +54,7 @@ query 集在 `scripts/eval_queries.txt`，`--dry-run` 可零成本先看计划�
 ## 启动
 
 ```bash
-cd /vol1/1000/Tools/jim-search-docker
+git clone <repo-url> && cd jim-search-docker
 cp .env.example .env
 # 编辑 .env 填入你的 API key
 docker compose up -d
@@ -144,7 +144,7 @@ X-API-Key: <token>
 | `JIM_SEARCH_FALLBACK_PROVIDERS` | 兜底源，逗号分隔，compose 默认 `deepseek`（代码默认空）；主链全失败后才调用，排在 DuckDuckGo 之前 |
 | `JIM_SEARCH_LOG_DIR` | 结构化请求日志目录；容器内固定 `/app/logs`（宿主 `./logs`），留空关闭 |
 | `JIM_SEARCH_LOG_RETENTION_DAYS` | 请求日志保留天数，默认 30 |
-| `HTTP_PROXY` / `HTTPS_PROXY` | 出站代理，默认 `http://127.0.0.1:7890` |
+| `HTTP_PROXY` / `HTTPS_PROXY` | 出站代理，默认不设；容器用 host 网络时可填宿主机代理，如 `http://127.0.0.1:7890` |
 | `JIM_SEARCH_PROVIDER_ORDER` | `random`（默认）、`sequential`、显式逗号列表（如 `tavily,brave`）或 `shuffle:<列表>`（指定成员内随机次序） |
 | `JIM_SEARCH_ROUTING` | 按查询类型路由，默认 `true`；`false` 退回 `JIM_SEARCH_PROVIDER_ORDER` 的顺序 |
 | `JIM_SEARCH_SCRAPE_CONCURRENCY` | 抓取并发数，默认 5 |

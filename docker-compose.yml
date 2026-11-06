@@ -1,13 +1,13 @@
-# 开机自启：restart 刻意为 "no" —— dockerd 开机会把带策略的容器一波并行恢复，
-# 全机容器统一由宿主 ~/.local/bin/containers-stagger.sh（root crontab @reboot）自动分批拉起
+# restart 刻意为 "no"：需要开机自启时由宿主自行安排（如 cron @reboot 分批拉起），
+# 避免 dockerd 启动瞬间并行恢复全部容器造成资源争抢。
 services:
   jim-search:
     build:
       context: .
       network: host
       args:
-        - HTTP_PROXY=${HTTP_PROXY:-http://127.0.0.1:7890}
-        - HTTPS_PROXY=${HTTPS_PROXY:-http://127.0.0.1:7890}
+        - HTTP_PROXY=${HTTP_PROXY:-}
+        - HTTPS_PROXY=${HTTPS_PROXY:-}
     image: jim-search:latest
     container_name: jim-search-mcp
     restart: "no"
@@ -30,8 +30,8 @@ services:
       # DeepSeek 独立 Search/Fetch API（$0.75/1000 次成功请求）；key 配在 .env 里
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
       - PARALLEL_SEARCH_MODE=${PARALLEL_SEARCH_MODE:-fast}
-      - HTTP_PROXY=${HTTP_PROXY:-http://127.0.0.1:7890}
-      - HTTPS_PROXY=${HTTPS_PROXY:-http://127.0.0.1:7890}
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
       - JIM_SEARCH_PROVIDER_ORDER=${JIM_SEARCH_PROVIDER_ORDER:-random}
       # 按查询类型路由（语言+意图词）；关掉则退回 PROVIDER_ORDER 的顺序
       - JIM_SEARCH_ROUTING=${JIM_SEARCH_ROUTING:-true}
@@ -45,7 +45,7 @@ services:
       - JIM_SEARCH_SCRAPE_CONCURRENCY=${JIM_SEARCH_SCRAPE_CONCURRENCY:-5}
       - JIM_SEARCH_MAX_CHARS=${JIM_SEARCH_MAX_CHARS:-20000}
       - JIM_SEARCH_AUTH_TOKEN=${JIM_SEARCH_AUTH_TOKEN:-}
-      - JIM_SEARCH_ALLOWED_HOSTS=${JIM_SEARCH_ALLOWED_HOSTS:-localhost,127.0.0.1,192.168.31.165}
+      - JIM_SEARCH_ALLOWED_HOSTS=${JIM_SEARCH_ALLOWED_HOSTS:-localhost,127.0.0.1}
       # 熔断恢复时间按本地午夜计算，需与宿主机时区一致
       - TZ=${TZ:-Asia/Shanghai}
       # Cookie 通道：域名→cookie 文件名映射用代码默认值（toutiao/baidu/weibo），

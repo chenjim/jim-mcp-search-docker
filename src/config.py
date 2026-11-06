@@ -71,7 +71,7 @@ AUTH_TOKEN: str = (_get_env("JIM_SEARCH_AUTH_TOKEN", "") or "").strip()
 # Allowed Host header values for the /mcp endpoint (DNS rebinding protection whitelist).
 # Comma-separated host names or IPs; a "*" port suffix is added by mcp_server.py.
 ALLOWED_HOSTS: list = [
-    h.strip() for h in _get_env("JIM_SEARCH_ALLOWED_HOSTS", "localhost,127.0.0.1,192.168.31.165").split(",")
+    h.strip() for h in _get_env("JIM_SEARCH_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
     if h.strip()
 ]
 

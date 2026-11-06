@@ -17,7 +17,7 @@ from src import config, service
 logger = logging.getLogger(__name__)
 
 # Whitelist Host headers for the /mcp endpoint: DNS rebinding protection is on,
-# so LAN access (e.g. via 192.168.31.165) needs to be allow-listed explicitly.
+# so LAN access (e.g. via a private IP) needs to be allow-listed explicitly.
 _transport_security = TransportSecuritySettings(
     allowed_hosts=[f"{host}:*" for host in config.ALLOWED_HOSTS]
 )
