@@ -45,7 +45,7 @@ jina.ai → DeepSeek Fetch → Parallel Extract → Firecrawl scrape → direct
 上面的路由表来自 13 条 query × 5 家源 × 2 轮的同题实测（延迟、两轮自重合、URL 重合度、
 逐场景结果对照），不是拍脑袋排的：
 
-[《五家搜索 API 实测：延迟差 10 倍，最快的那家重复最多》](https://h89.cn/archives/857.html)
+[《五家搜索 API 实测：问文档和问政策，不该用同一家》](https://h89.cn/archives/857.html)
 
 ## 请求记录与多源评测
 
