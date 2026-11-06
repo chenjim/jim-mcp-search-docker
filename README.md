@@ -10,6 +10,8 @@
 - `shuffle:<列表>`（如 `shuffle:brave,tavily,parallel,baidu,deepseek`）：成员仅限列出的源，次序每次请求随机——
   用于「指定成员内均衡免费额度、但要把某个源（如 firecrawl）排除在搜索外」的场景
 
+默认开启 `JIM_SEARCH_ROUTING`：先按查询语言与意图词决定链首——中文政策/标准 → DeepSeek，英文文档/规格 → Parallel，英文评测/购物 → Brave，中文社区/百科 → 百度，时效统计 → Parallel；再用 `JIM_SEARCH_PROVIDER_ORDER` 的顺序补齐剩余源。设为 `false` 则完全按上面的顺序轮转。分类规则在 `src/routing.py`，可读可改，不调用模型。
+
 DuckDuckGo 始终最后兜底（除非在显式列表中点名）。`random` / `sequential` 会跳过**未配置 key**或**当天额度/鉴权失败（熔断至次日 00:00）**的源；显式列表与 `shuffle:` 不跳过，按点名顺序照试。DuckDuckGo 直接请求 `html.duckduckgo.com`（无需 key），短时间内高频会拿到 202 反爬页——触发后 5 分钟内自动跳过，不熔断到次日。
 
 `JIM_SEARCH_FALLBACK_PROVIDERS`（默认 `deepseek`）指定**兜底源**：不进日常轮转，
@@ -144,6 +146,7 @@ X-API-Key: <token>
 | `JIM_SEARCH_LOG_RETENTION_DAYS` | 请求日志保留天数，默认 30 |
 | `HTTP_PROXY` / `HTTPS_PROXY` | 出站代理，默认 `http://127.0.0.1:7890` |
 | `JIM_SEARCH_PROVIDER_ORDER` | `random`（默认）、`sequential`、显式逗号列表（如 `tavily,brave`）或 `shuffle:<列表>`（指定成员内随机次序） |
+| `JIM_SEARCH_ROUTING` | 按查询类型路由，默认 `true`；`false` 退回 `JIM_SEARCH_PROVIDER_ORDER` 的顺序 |
 | `JIM_SEARCH_SCRAPE_CONCURRENCY` | 抓取并发数，默认 5 |
 | `JIM_SEARCH_MAX_CHARS` | 单页截断长度，默认 20000，0 不限 |
 | `JIM_SEARCH_MIN_CONTENT_LENGTH` | 判定抓取成功的最小字符数，默认 200 |

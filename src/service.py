@@ -13,7 +13,7 @@ from typing import List, Optional
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
-from src import config, cookies, recorder
+from src import config, cookies, recorder, routing
 from src.providers import ProviderQuotaError, SearchResult, normalize_url
 from src.providers import (
     brave,
@@ -132,26 +132,8 @@ def _fallback_names(names: List[str]) -> List[str]:
     return extra
 
 
-def _provider_chain():
-    """Build the ordered provider chain from ``JIM_SEARCH_PROVIDER_ORDER``.
-
-    ``random`` shuffles the *available* paid providers to spread free quota
-    evenly; ``sequential`` keeps the fixed Brave → Firecrawl → Tavily → Parallel
-    order. An explicit comma-separated list (e.g. ``tavily,brave``) is honoured
-    as-is — those providers are tried even when unconfigured or tripped, since
-    the user named them. A ``shuffle:`` prefixed list (e.g.
-    ``shuffle:brave,tavily,parallel,baidu``) restricts membership to the named
-    providers but randomises their order per request, spreading free quota
-    evenly across exactly that set.
-
-    ``JIM_SEARCH_FALLBACK_PROVIDERS`` (default empty; e.g. ``deepseek``) is
-    appended after the main chain and before DuckDuckGo, so a cheap backstop is
-    only billed when the primary sources fail or return nothing. Fallbacks are
-    skipped when unconfigured or tripped.
-
-    DuckDuckGo is always appended last as the zero-cost fallback unless it is
-    listed explicitly.
-    """
+def _configured_chain() -> List[str]:
+    """``JIM_SEARCH_PROVIDER_ORDER`` 展开出的基础顺序（路由关闭时的完整链）。"""
     setting = (config.SEARCH_PROVIDER_ORDER or "random").strip().lower()
     names: List[str]
     shuffled = False
@@ -177,10 +159,47 @@ def _provider_chain():
                 names.append(name)
         if shuffled and names:
             random.shuffle(names)
+    return names
+
+
+def _provider_chain(query: Optional[str] = None):
+    """Build the ordered provider chain.
+
+    开启 ``JIM_SEARCH_ROUTING``（默认）且给了 query 时，链首由
+    ``routing.classify`` 按类型决定（中文政策→DeepSeek、英文文档→Parallel 等），
+    再按 ``JIM_SEARCH_PROVIDER_ORDER`` 的顺序补齐剩余源；关掉路由则完全沿用
+    下面的基础顺序。
+
+    ``random`` shuffles the *available* paid providers to spread free quota
+    evenly; ``sequential`` keeps the fixed Brave → Firecrawl → Tavily → Parallel
+    order. An explicit comma-separated list (e.g. ``tavily,brave``) is honoured
+    as-is — those providers are tried even when unconfigured or tripped, since
+    the user named them. A ``shuffle:`` prefixed list (e.g.
+    ``shuffle:brave,tavily,parallel,baidu``) restricts membership to the named
+    providers but randomises their order per request, spreading free quota
+    evenly across exactly that set.
+
+    ``JIM_SEARCH_FALLBACK_PROVIDERS`` (default empty; e.g. ``deepseek``) is
+    appended after the main chain and before DuckDuckGo, so a cheap backstop is
+    only billed when the primary sources fail or return nothing. Fallbacks are
+    skipped when unconfigured or tripped.
+
+    DuckDuckGo is always appended last as the zero-cost fallback unless it is
+    listed explicitly.
+    """
+    base = _configured_chain()
+    route = None
+    if config.ROUTING_ENABLED and query:
+        route = routing.classify(query)
+        routed = [name for name in routing.providers_for(query) if _is_available(name)]
+        names = routed + [name for name in base if name not in routed]
+    else:
+        names = list(base)
+
     names.extend(name for name in _fallback_names(names) if name not in names)
     if "duckduckgo" not in names:
         names.append("duckduckgo")
-    logger.info("Provider order: %s", names)
+    logger.info("Provider order (%s): %s", route or "no-route", names)
     return [(name, _REGISTRY[name]) for name in names]
 
 
@@ -189,7 +208,8 @@ def search(query: str, top: int = 10, freshness: Optional[str] = None) -> dict:
     top = max(1, min(int(top), MAX_RESULTS))
     logger.info("Search request: q=%s top=%d freshness=%s", query, top, freshness)
 
-    chain = _provider_chain()
+    chain = _provider_chain(query)
+    route = routing.classify(query) if config.ROUTING_ENABLED else None
     started = time.monotonic()
     raw_results: List[SearchResult] = []
     search_chain_used: List[str] = []
@@ -256,6 +276,7 @@ def search(query: str, top: int = 10, freshness: Optional[str] = None) -> dict:
         "query": query,
         "top": top,
         "freshness": freshness,
+        "route": route,
         "chain_planned": [name for name, _ in chain],
         "attempts": attempts,
         "chain_used": search_chain_used,
@@ -279,7 +300,7 @@ def search(query: str, top: int = 10, freshness: Optional[str] = None) -> dict:
         "query": query,
         "search_chain_used": search_chain_used,
         "results": results_out,
-        "metadata": {"total_results": len(results_out)},
+        "metadata": {"total_results": len(results_out), "route": route},
     }
 
 

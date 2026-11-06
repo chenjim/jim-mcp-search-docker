@@ -49,6 +49,14 @@ SEARCH_PROVIDER_ORDER: str = _get_env("JIM_SEARCH_PROVIDER_ORDER", "random")
 # 未配置 key 或已熔断的源会被跳过。
 FALLBACK_PROVIDERS: list = _csv_env("JIM_SEARCH_FALLBACK_PROVIDERS", "")
 
+# 按查询类型路由（语言 + 意图词），替代随机轮转。关掉则退回 PROVIDER_ORDER 的顺序。
+ROUTING_ENABLED: bool = (_get_env("JIM_SEARCH_ROUTING", "true") or "").strip().lower() not in (
+    "0",
+    "false",
+    "no",
+    "off",
+)
+
 # 结构化请求日志目录（JSONL，按天分文件）；留空则关闭。
 # 容器内由 compose 挂载 ./logs:/app/logs。
 LOG_DIR: str = (_get_env("JIM_SEARCH_LOG_DIR", "") or "").strip()

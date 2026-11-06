@@ -84,7 +84,7 @@ def test_search_trips_breaker_on_quota_error(monkeypatch):
     def boom(query, count=10, freshness=None):
         raise ProviderQuotaError("brave", "402")
 
-    monkeypatch.setattr(service, "_provider_chain", lambda: [("brave", boom)])
+    monkeypatch.setattr(service, "_provider_chain", lambda query=None: [("brave", boom)])
     with pytest.raises(service.SearchError):
         service.search("q")
 
@@ -96,7 +96,7 @@ def test_search_does_not_trip_breaker_on_transient_error(monkeypatch):
     def boom(query, count=10, freshness=None):
         raise ProviderError("brave", "connection reset")
 
-    monkeypatch.setattr(service, "_provider_chain", lambda: [("brave", boom)])
+    monkeypatch.setattr(service, "_provider_chain", lambda query=None: [("brave", boom)])
     with pytest.raises(service.SearchError):
         service.search("q")
 
@@ -144,3 +144,36 @@ def test_fallback_not_duplicated_when_named_in_chain(monkeypatch):
     monkeypatch.setattr(config, "FALLBACK_PROVIDERS", ["deepseek"])
     names = [name for name, _ in service._provider_chain()]
     assert names.count("deepseek") == 1
+
+
+def test_routing_puts_deepseek_first_for_chinese_policy(monkeypatch):
+    _set_keys(monkeypatch, **ALL_KEYS, DEEPSEEK_API_KEY="k", BAIDU_API_KEY="k")
+    monkeypatch.setattr(config, "ROUTING_ENABLED", True)
+    monkeypatch.setattr(config, "SEARCH_PROVIDER_ORDER", "shuffle:brave,tavily,parallel,baidu")
+    names = [n for n, _ in service._provider_chain("个人养老金 缴费上限 政策")]
+    assert names[:2] == ["deepseek", "baidu"]
+
+
+def test_routing_puts_parallel_first_for_english_docs(monkeypatch):
+    _set_keys(monkeypatch, **ALL_KEYS, DEEPSEEK_API_KEY="k", BAIDU_API_KEY="k")
+    monkeypatch.setattr(config, "ROUTING_ENABLED", True)
+    monkeypatch.setattr(config, "SEARCH_PROVIDER_ORDER", "shuffle:brave,tavily,parallel,baidu")
+    names = [n for n, _ in service._provider_chain("PostgreSQL 18 release notes")]
+    assert names[:2] == ["parallel", "brave"]
+
+
+def test_routing_skips_unavailable_route_head(monkeypatch):
+    _set_keys(monkeypatch, **ALL_KEYS, DEEPSEEK_API_KEY=None, BAIDU_API_KEY="k")
+    monkeypatch.setattr(config, "ROUTING_ENABLED", True)
+    monkeypatch.setattr(config, "SEARCH_PROVIDER_ORDER", "shuffle:brave,tavily,parallel,baidu")
+    names = [n for n, _ in service._provider_chain("个人养老金 缴费上限 政策")]
+    assert names[0] == "baidu"
+
+
+def test_routing_off_keeps_configured_order(monkeypatch):
+    _set_keys(monkeypatch, **ALL_KEYS, DEEPSEEK_API_KEY="k", BAIDU_API_KEY="k")
+    monkeypatch.setattr(config, "ROUTING_ENABLED", False)
+    monkeypatch.setattr(config, "SEARCH_PROVIDER_ORDER", "brave,tavily")
+    names = [n for n, _ in service._provider_chain("个人养老金 缴费上限 政策")]
+    assert names[:2] == ["brave", "tavily"]
+    assert "deepseek" not in names

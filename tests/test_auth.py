@@ -36,7 +36,7 @@ def fake_backends(monkeypatch):
     monkeypatch.setattr(config, "AUTH_TOKEN", "secret")
     monkeypatch.setattr(
         service, "_provider_chain",
-        lambda: [("brave", lambda q, count=10, freshness=None: [SearchResult(title="T", url="https://e.com", snippet="s")])],
+        lambda query=None: [("brave", lambda q, count=10, freshness=None: [SearchResult(title="T", url="https://e.com", snippet="s")])],
     )
     monkeypatch.setattr(
         service.jina_scraper, "scrape",

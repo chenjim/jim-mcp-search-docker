@@ -26,7 +26,7 @@ def test_search_dedups_and_keeps_snippet(monkeypatch):
         SearchResult(title="A dup", url="https://a.com/x", snippet="dup"),
         SearchResult(title="B", url="https://b.com", snippet="sb"),
     ]
-    monkeypatch.setattr(service, "_provider_chain", lambda: [_provider("brave", results)])
+    monkeypatch.setattr(service, "_provider_chain", lambda query=None: [_provider("brave", results)])
 
     out = service.search("q", top=10)
     assert out["search_chain_used"] == ["brave"]
@@ -37,7 +37,7 @@ def test_search_dedups_and_keeps_snippet(monkeypatch):
 
 def test_search_falls_back_to_next_provider(monkeypatch):
     chain = [_provider("brave", []), _provider("tavily", [SearchResult(title="T", url="https://t.com")])]
-    monkeypatch.setattr(service, "_provider_chain", lambda: chain)
+    monkeypatch.setattr(service, "_provider_chain", lambda query=None: chain)
 
     out = service.search("q")
     assert out["search_chain_used"] == ["tavily"]
@@ -48,7 +48,7 @@ def test_search_raises_when_all_fail(monkeypatch):
     def boom(query, count=10, freshness=None):
         raise RuntimeError("nope")
 
-    monkeypatch.setattr(service, "_provider_chain", lambda: [("brave", boom)])
+    monkeypatch.setattr(service, "_provider_chain", lambda query=None: [("brave", boom)])
     with pytest.raises(service.SearchError):
         service.search("q")
 
@@ -159,7 +159,7 @@ def test_scrape_urls_caps_url_count(monkeypatch):
 
 def test_search_clamps_top(monkeypatch):
     results = [SearchResult(title=f"T{i}", url=f"https://e.com/{i}") for i in range(50)]
-    monkeypatch.setattr(service, "_provider_chain", lambda: [_provider("brave", results)])
+    monkeypatch.setattr(service, "_provider_chain", lambda query=None: [_provider("brave", results)])
     out = service.search("q", top=999)
     assert len(out["results"]) == service.MAX_RESULTS
 
@@ -222,7 +222,7 @@ def test_search_records_query_attempts_and_results(monkeypatch):
         _provider("brave", []),
         _provider("deepseek", [SearchResult(title="D", url="https://d.com", snippet="sd")]),
     ]
-    monkeypatch.setattr(service, "_provider_chain", lambda: chain)
+    monkeypatch.setattr(service, "_provider_chain", lambda query=None: chain)
 
     service.search("apple results", top=5, freshness="pw")
 
@@ -252,7 +252,7 @@ def test_search_records_failure_with_error(monkeypatch):
     def boom(query, count=10, freshness=None):
         raise RuntimeError("nope")
 
-    monkeypatch.setattr(service, "_provider_chain", lambda: [("brave", boom)])
+    monkeypatch.setattr(service, "_provider_chain", lambda query=None: [("brave", boom)])
     with pytest.raises(service.SearchError):
         service.search("q")
 
@@ -302,3 +302,23 @@ def test_scrape_urls_records_each_url(monkeypatch):
     assert captured[0][1]["status"] == "ok"
     assert captured[0][1]["source"] == "jina"
     assert captured[0][1]["chars"] == 10
+
+
+def test_search_records_route(monkeypatch):
+    captured = []
+    monkeypatch.setattr(
+        service.recorder, "record", lambda kind, payload: captured.append(payload)
+    )
+    monkeypatch.setattr(service, "_provider_chain", lambda query=None: [_provider("brave", [])])
+
+    with pytest.raises(service.SearchError):
+        service.search("个人养老金 政策")
+
+    assert captured[0]["route"] == "zh_policy"
+
+
+def test_search_response_metadata_contains_route(monkeypatch):
+    results = [SearchResult(title="A", url="https://a.com")]
+    monkeypatch.setattr(service, "_provider_chain", lambda query=None: [_provider("brave", results)])
+    out = service.search("PostgreSQL 18 release notes")
+    assert out["metadata"]["route"] == "en_docs"

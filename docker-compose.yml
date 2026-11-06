@@ -33,6 +33,8 @@ services:
       - HTTP_PROXY=${HTTP_PROXY:-http://127.0.0.1:7890}
       - HTTPS_PROXY=${HTTPS_PROXY:-http://127.0.0.1:7890}
       - JIM_SEARCH_PROVIDER_ORDER=${JIM_SEARCH_PROVIDER_ORDER:-random}
+      # 按查询类型路由（语言+意图词）；关掉则退回 PROVIDER_ORDER 的顺序
+      - JIM_SEARCH_ROUTING=${JIM_SEARCH_ROUTING:-true}
       # 兜底源：主链全失败/空结果时才试，位于 DuckDuckGo 之前
       - JIM_SEARCH_FALLBACK_PROVIDERS=${JIM_SEARCH_FALLBACK_PROVIDERS:-deepseek}
       - JIM_SEARCH_LOG_DIR=/app/logs
