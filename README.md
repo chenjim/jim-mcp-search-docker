@@ -7,7 +7,7 @@
 - `random`（默认）：Brave / Firecrawl / Tavily / Parallel / Baidu 每次随机打散，均衡免费额度
 - `sequential`：固定 Brave → Firecrawl → Tavily → Parallel → Baidu
 - 逗号列表（如 `tavily,brave`）：严格按列出顺序，未列出的源不参与
-- `shuffle:<列表>`（如 `shuffle:brave,tavily,parallel,baidu`）：成员仅限列出的源，次序每次请求随机——
+- `shuffle:<列表>`（如 `shuffle:brave,tavily,parallel,baidu,deepseek`）：成员仅限列出的源，次序每次请求随机——
   用于「指定成员内均衡免费额度、但要把某个源（如 firecrawl）排除在搜索外」的场景
 
 DuckDuckGo 始终最后兜底（除非在显式列表中点名）。`random` / `sequential` 会跳过**未配置 key**或**当天额度/鉴权失败（熔断至次日 00:00）**的源；显式列表与 `shuffle:` 不跳过，按点名顺序照试。DuckDuckGo 直接请求 `html.duckduckgo.com`（无需 key），短时间内高频会拿到 202 反爬页——触发后 5 分钟内自动跳过，不熔断到次日。
