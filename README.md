@@ -10,7 +10,7 @@
 - `shuffle:<列表>`（如 `shuffle:brave,tavily,parallel,baidu`）：成员仅限列出的源，次序每次请求随机——
   用于「指定成员内均衡免费额度、但要把某个源（如 firecrawl）排除在搜索外」的场景
 
-DuckDuckGo 始终最后兜底（除非在显式列表中点名）。`random` / `sequential` 会跳过**未配置 key**或**当天额度/鉴权失败（熔断至次日 00:00）**的源；显式列表与 `shuffle:` 不跳过，按点名顺序照试。
+DuckDuckGo 始终最后兜底（除非在显式列表中点名）。`random` / `sequential` 会跳过**未配置 key**或**当天额度/鉴权失败（熔断至次日 00:00）**的源；显式列表与 `shuffle:` 不跳过，按点名顺序照试。DuckDuckGo 直接请求 `html.duckduckgo.com`（无需 key），短时间内高频会拿到 202 反爬页——触发后 5 分钟内自动跳过，不熔断到次日。
 
 `JIM_SEARCH_FALLBACK_PROVIDERS`（默认 `deepseek`）指定**兜底源**：不进日常轮转，
 主链全部失败或返回空结果时才调用，位置在 DuckDuckGo 之前。未配置 key 或当天已熔断的
