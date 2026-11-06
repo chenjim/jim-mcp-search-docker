@@ -38,9 +38,10 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="jim-search",
     description=(
-        "Unified search + scrape API: Brave/Firecrawl/Tavily/Parallel/Baidu in rotation "
-        "→ DeepSeek fallback → DuckDuckGo; scrape via jina.ai → DeepSeek Fetch → Parallel "
-        "→ Firecrawl → direct. MCP endpoint at /mcp."
+        "Unified search + scrape API: query-type routing (policy→DeepSeek, docs→Parallel, "
+        "community→Baidu, review→Brave) with the configured rotation as tail, then DeepSeek "
+        "fallback and DuckDuckGo; scrape via jina.ai → DeepSeek Fetch → Parallel → Firecrawl "
+        "→ direct. MCP endpoint at /mcp."
     ),
     version="0.2.0",
     lifespan=lifespan,

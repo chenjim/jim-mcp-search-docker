@@ -38,6 +38,10 @@ mcp = FastMCP(
 async def web_search(query: str, top: int = 10, freshness: Optional[str] = None) -> str:
     """Search the web and return results (title, url, snippet) without fetching pages.
 
+    The provider is chosen server-side from the query type (policy→DeepSeek,
+    docs→Parallel, community→Baidu, review→Brave) and reported as
+    ``metadata.route``; there is no provider argument.
+
     Args:
         query: Search keywords.
         top: Number of results to return (1-20).
@@ -57,7 +61,7 @@ async def web_scrape(
     max_chars: Optional[int] = None,
     concurrency: Optional[int] = None,
 ) -> str:
-    """Fetch full page content as markdown for one or more URLs (jina.ai -> DeepSeek Fetch -> Parallel -> Firecrawl fallback).
+    """Fetch full page content as markdown for one or more URLs (jina.ai -> DeepSeek Fetch -> Parallel -> Firecrawl -> direct fallback).
 
     Args:
         urls: URLs to fetch. They are scraped concurrently.
